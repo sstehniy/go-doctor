@@ -4,7 +4,7 @@ This directory contains the full implementation PRDs for `go-doctor`, ordered by
 
 ## Execution Order
 
-1. [Milestone 1: Core Skeleton](./m1-core-skeleton.md)
+1. [Milestone 1: Core Skeleton](./m1-core-skeleton.md) (Done)
    Establish the CLI foundation, config loading, project discovery, stable result types, and text/JSON output.
 2. [Milestone 2: Third-Party Adapters](./m2-third-party-adapters.md)
    Integrate `go vet`, `staticcheck`, `govulncheck`, and the approved `golangci` subset through a shared analyzer interface.

@@ -1,5 +1,7 @@
 # 1. Executive Summary
 
+Status: Done
+
 - **Problem Statement**: `go-doctor` does not yet have a runnable foundation, so none of the planned analyzer or CI work can ship safely. The first milestone must establish the CLI, project model, config loading, and stable output contracts that every later milestone depends on.
 - **Proposed Solution**: Build the repository skeleton, core execution pipeline, stable diagnostic/result types, and human plus JSON output so the tool can complete a no-findings scan on a simple Go repo. Treat this milestone as the contract-setting layer for the rest of v1.
 - **Success Criteria**:

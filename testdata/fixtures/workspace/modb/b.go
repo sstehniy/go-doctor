@@ -1,0 +1,3 @@
+package modb
+
+func B() {}
