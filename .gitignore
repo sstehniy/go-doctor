@@ -9,3 +9,6 @@ coverage.out
 *.so
 *.dylib
 
+.agents/
+.claude/
+skills-lock.json
