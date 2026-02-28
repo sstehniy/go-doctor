@@ -8,6 +8,18 @@ From source:
 go build -o go-doctor ./cmd/go-doctor
 ```
 
+With `go install`:
+
+```bash
+go install github.com/stanislavstehniy/go-doctor/cmd/go-doctor@latest
+```
+
+Pinned release:
+
+```bash
+go install github.com/stanislavstehniy/go-doctor/cmd/go-doctor@v1.2.3
+```
+
 From a release archive:
 
 1. Download the matching `go-doctor_<version>_<os>_<arch>.(tar.gz|zip)` artifact.

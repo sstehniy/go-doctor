@@ -51,8 +51,13 @@ jobs:
               ./cmd/go-doctor
 
           if [[ "${{ matrix.ext }}" == "zip" ]]; then
-            (cd dist && zip -q ../release/go-doctor.zip "${{ matrix.binary }}")
-            unzip -q release/go-doctor.zip -d unpacked
+            if [[ "${{ runner.os }}" == "Windows" ]]; then
+              powershell -NoLogo -NoProfile -Command \
+                "Compress-Archive -Path 'dist/${{ matrix.binary }}' -DestinationPath 'release/go-doctor.zip' -Force; Expand-Archive -Path 'release/go-doctor.zip' -DestinationPath 'unpacked' -Force"
+            else
+              (cd dist && zip -q ../release/go-doctor.zip "${{ matrix.binary }}")
+              unzip -q release/go-doctor.zip -d unpacked
+            fi
           else
             (cd dist && tar -czf ../release/go-doctor.tar.gz "${{ matrix.binary }}")
             tar -xzf release/go-doctor.tar.gz -C unpacked
@@ -73,4 +78,19 @@ jobs:
             '  custom: false' > .go-doctor-smoke.yaml
 
           "$bin" --config .go-doctor-smoke.yaml testdata/fixtures/integration/clean-service > smoke-output.txt
-          grep -q "healthy: no findings" smoke-output.txt
+          grep -q "healthy: no active findings" smoke-output.txt
+
+  release-smoke-gate:
+    name: release-smoke-gate
+    needs: [smoke]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce matrix success
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ needs.smoke.result }}" != "success" ]]; then
+            echo "release-smoke matrix failed with status: ${{ needs.smoke.result }}"
+            exit 1
+          fi
