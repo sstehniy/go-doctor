@@ -2,35 +2,137 @@
 
 `go-doctor` is a Go code health checker for Go repositories.
 
-Its goal is simple: give Go engineers one command that scans a repo, highlights meaningful issues, and returns an easy-to-understand health signal that can be used both locally and in CI.
+Goal: one command that scans a repo, surfaces high-signal findings, and gives a clear health signal for local work and CI.
 
-## Core Idea
+## Why It Exists
 
-Instead of relying on a scattered set of separate tools, `go-doctor` is intended to combine useful checks into one consistent experience:
+Instead of stitching together separate tools and output formats, `go-doctor` provides one normalized workflow:
 
-- find reliability and maintainability issues
-- surface actionable findings in one place
-- provide a simple repo health score
-- support local development and CI workflows
+- reliability and maintainability findings in one report
+- consistent diagnostic model across analyzers
+- repo health score for trend tracking
+- baseline and suppression controls for legacy-repo adoption
 
-The focus is on practical, high-signal issues that help teams catch problems early, not style debates or risky auto-fixes.
+It is intentionally focused on practical issues that can prevent incidents and regressions.
 
-## What It Is For
+## Supported Repos
 
-`go-doctor` is being designed for:
+- single-module `go.mod` repos
+- multi-module `go.work` repos
+- services, libraries, and CLIs
 
-- Go services
-- Go libraries
-- Go CLIs
-- single-module and multi-module repos
+## Quick Start
 
-The intended user is a Go engineer who wants fast, useful feedback before problems reach production.
+Build from source:
 
-## What It Is Not
+```bash
+go build ./cmd/go-doctor
+```
 
-This project is not meant to be:
+Run on the current repo:
+
+```bash
+go run ./cmd/go-doctor .
+```
+
+Machine-readable output:
+
+```bash
+go run ./cmd/go-doctor --format json .
+```
+
+## Rule Discovery
+
+List all available rules and selectors:
+
+```bash
+go run ./cmd/go-doctor --list-rules
+```
+
+Select rules explicitly:
+
+```bash
+go run ./cmd/go-doctor --enable mod/not-tidy,build/mod-readonly-failure .
+go run ./cmd/go-doctor --disable fmt/not-gofmt .
+```
+
+## Baseline-First Adoption (Recommended)
+
+For mature repos, adopt with a baseline first so legacy findings are visible but do not block rollout.
+
+Local first run (creates baseline file if missing, outside CI):
+
+```bash
+go run ./cmd/go-doctor --baseline .go-doctor-baseline.json --fail-on warning .
+```
+
+Then commit `.go-doctor-baseline.json` and keep running with the same baseline in CI. Existing findings stay visible as `(suppressed)`, while new findings fail the build based on `--fail-on`.
+
+Full step-by-step onboarding path (including copy-paste config and CI command) is in:
+[docs/adoption.md](./docs/adoption.md)
+
+## Inline Suppressions
+
+`go-doctor` supports inline suppressions:
+
+- `// godoctor:ignore <rule> <reason>`
+- `// godoctor:ignore-next-line <rule> <reason>`
+
+Examples:
+
+```go
+return err.Error() == "EOF" // godoctor:ignore error/string-compare legacy wire-protocol sentinel
+
+// godoctor:ignore-next-line concurrency/ticker-stop test-only fire-and-forget ticker
+t := time.NewTicker(time.Second)
+```
+
+Suppression policy:
+
+- rule name is required
+- reason is required in non-test files
+- in `*_test.go` files, reason is optional
+- invalid directives are reported as `repo/suppress/invalid`
+
+## Baseline Regeneration
+
+If you intentionally want to refresh baseline entries:
+
+```bash
+rm -f .go-doctor-baseline.json
+go run ./cmd/go-doctor --baseline .go-doctor-baseline.json .
+```
+
+To inspect all findings without applying baseline suppression:
+
+```bash
+go run ./cmd/go-doctor --baseline .go-doctor-baseline.json --no-baseline .
+```
+
+## Repo Hygiene Rules
+
+Built-in repo-level rules include:
+
+- `mod/not-tidy` (default on, warning)
+- `mod/replace-local-path` (default on, warning)
+- `build/mod-readonly-failure` (default on, error)
+- `fmt/not-gofmt` (default off, info)
+- `license/missing` (default off, info)
+
+`mod/not-tidy` and `build/mod-readonly-failure` run checks against temp copies. They do not mutate the checked-out workspace.
+
+## CLI and Config Notes
+
+- CLI flags override config file values.
+- Config auto-discovery order: `.go-doctor.yaml`, `.go-doctor.yml`, `.go-doctor.json`.
+- `scan.baseline` or `--baseline` enables baseline filtering.
+- In CI (`CI=true`), baseline path must exist unless `--no-baseline` is set.
+
+## Out of Scope
+
+`go-doctor` is not:
 
 - a hosted platform
 - an IDE plugin
-- a code rewriting tool
+- an auto-remediation engine
 - a replacement for every linter
