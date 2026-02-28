@@ -2,8 +2,6 @@ name: release-smoke
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["main"]
   pull_request:
 
 permissions:
@@ -38,6 +36,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: false
 
       - name: Build and package binary
         shell: bash
