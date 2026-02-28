@@ -3,6 +3,7 @@ package custom
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/build"
@@ -73,6 +74,8 @@ type typedFile struct {
 	source *sourceFile
 	file   *ast.File
 }
+
+var ErrNoModulesMatchedFilter = errors.New("no modules matched filter")
 
 func loadAnalysisContext(ctx context.Context, target diagnostics.Target) (*analysisContext, []model.ToolError) {
 	absRoot, err := filepath.Abs(target.RepoRoot)
@@ -330,7 +333,7 @@ func selectedModuleInfos(target diagnostics.Target) ([]moduleInfo, error) {
 	if len(target.ModulePatterns) > 0 {
 		roots = filterModuleRoots(target.ModuleRoots, target.ModulePatterns)
 		if len(roots) == 0 {
-			return nil, fmt.Errorf("no modules matched filter %q", strings.Join(target.ModulePatterns, ","))
+			return nil, fmt.Errorf("%w %q", ErrNoModulesMatchedFilter, strings.Join(target.ModulePatterns, ","))
 		}
 	}
 	if len(roots) == 0 {

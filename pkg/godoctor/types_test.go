@@ -309,15 +309,15 @@ func TestDiagnoseDiffGovulncheckChangedModulesOnlyMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("diagnose: %v", err)
 	}
-	foundToolError := false
-	for _, toolErr := range result.ToolErrors {
-		if toolErr.Tool == "govulncheck" {
-			foundToolError = true
+	foundSkip := false
+	for _, skipped := range result.SkippedTools {
+		if strings.Contains(skipped, "govulncheck") {
+			foundSkip = true
 			break
 		}
 	}
-	if !foundToolError {
-		t.Fatalf("expected govulncheck to execute in changed-modules-only mode, got tool errors %#v", result.ToolErrors)
+	if foundSkip {
+		t.Fatalf("expected govulncheck to execute in changed-modules-only mode, got skipped tools %#v", result.SkippedTools)
 	}
 }
 

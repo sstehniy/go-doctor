@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	oversizedPackageDeclThreshold = 25
-	oversizedPackageFileThreshold = 12
-	godFileDeclThreshold          = 20
-	godFileLineThreshold          = 400
+	oversizedPackageDeclThreshold = 150
+	oversizedPackageFileThreshold = 20
+	cohesiveFileLineAllowance     = 500
+	godFileDeclThreshold          = 120
+	godFileLineThreshold          = 2000
 )
 
 var registry = []rule{
@@ -915,6 +916,9 @@ func runGodFile(pass *analysisContext, desc Descriptor) []model.Diagnostic {
 			continue
 		}
 		for _, file := range dir.nonTest {
+			if file.lineCount <= cohesiveFileLineAllowance {
+				continue
+			}
 			if len(file.file.Decls) <= godFileDeclThreshold && file.lineCount <= godFileLineThreshold {
 				continue
 			}

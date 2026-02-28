@@ -1,9 +1,9 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stanislavstehniy/go-doctor/pkg/godoctor"
@@ -59,7 +59,7 @@ func TestLoadRejectsUnknownKeys(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown key")
 	}
-	if !strings.Contains(err.Error(), "field bogus not found") {
+	if !errors.Is(err, ErrUnknownConfigField) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -75,7 +75,7 @@ func TestLoadRejectsUnknownRules(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown rule")
 	}
-	if !strings.Contains(err.Error(), `unknown rule "missing-rule"`) {
+	if !errors.Is(err, ErrUnknownRuleReference) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

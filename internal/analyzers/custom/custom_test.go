@@ -2,6 +2,7 @@ package custom
 
 import (
 	"context"
+	"errors"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -224,7 +225,7 @@ func TestSelectedModuleInfosRejectsUnknownModuleFilter(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown module filter to fail")
 	}
-	if !strings.Contains(err.Error(), "no modules matched filter") {
+	if !errors.Is(err, ErrNoModulesMatchedFilter) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

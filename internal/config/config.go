@@ -251,6 +251,9 @@ func parseYAML(raw []byte) (File, error) {
 	decoder.KnownFields(true)
 	var cfg File
 	if err := decoder.Decode(&cfg); err != nil {
+		if isUnknownFieldError(err) {
+			return File{}, fmt.Errorf("%w: %v", ErrUnknownConfigField, err)
+		}
 		return File{}, fmt.Errorf("parse yaml config: %w", err)
 	}
 	return cfg, nil
@@ -261,6 +264,9 @@ func parseJSON(raw []byte) (File, error) {
 	decoder.DisallowUnknownFields()
 	var cfg File
 	if err := decoder.Decode(&cfg); err != nil {
+		if isUnknownFieldError(err) {
+			return File{}, fmt.Errorf("%w: %v", ErrUnknownConfigField, err)
+		}
 		return File{}, fmt.Errorf("parse json config: %w", err)
 	}
 	return cfg, nil
@@ -277,7 +283,7 @@ func validateRules(cfg File, knownRules []string) error {
 			if _, ok := known[name]; ok {
 				continue
 			}
-			return fmt.Errorf("%s references unknown rule %q", source, name)
+			return fmt.Errorf("%w: %s references unknown rule %q", ErrUnknownRuleReference, source, name)
 		}
 		return nil
 	}
@@ -335,4 +341,13 @@ func IsUsageError(err error) bool {
 	return errors.Is(err, ErrUsage)
 }
 
-var ErrUsage = errors.New("usage error")
+func isUnknownFieldError(err error) bool {
+	message := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(message, "unknown field") || strings.Contains(message, "field") && strings.Contains(message, "not found in type")
+}
+
+var (
+	ErrUsage                = errors.New("usage error")
+	ErrUnknownConfigField   = errors.New("unknown config field")
+	ErrUnknownRuleReference = errors.New("unknown rule reference")
+)

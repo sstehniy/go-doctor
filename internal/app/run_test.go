@@ -34,7 +34,7 @@ func TestRunTextOutputSingleModule(t *testing.T) {
 	if !strings.Contains(output, "mode: module") {
 		t.Fatalf("expected module mode, got %q", output)
 	}
-	if !strings.Contains(output, "Score: 100/100 (Excellent)") {
+	if !strings.Contains(output, "100 / 100") || !strings.Contains(output, "Excellent") {
 		t.Fatalf("expected score, got %q", output)
 	}
 }

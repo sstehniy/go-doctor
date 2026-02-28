@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -270,13 +271,13 @@ func normalizeArtifactPath(projectRoot string, path string) string {
 
 func resultFingerprint(ruleID string, path string, line int, message string) string {
 	hash := fnv.New64a()
-	_, _ = hash.Write([]byte(ruleID))
+	_, _ = io.WriteString(hash, ruleID)
 	_, _ = hash.Write([]byte{0})
-	_, _ = hash.Write([]byte(path))
+	_, _ = io.WriteString(hash, path)
 	_, _ = hash.Write([]byte{0})
-	_, _ = hash.Write([]byte(strconv.Itoa(line)))
+	_, _ = io.WriteString(hash, strconv.Itoa(line))
 	_, _ = hash.Write([]byte{0})
-	_, _ = hash.Write([]byte(message))
+	_, _ = io.WriteString(hash, message)
 	return strconv.FormatUint(hash.Sum64(), 16)
 }
 

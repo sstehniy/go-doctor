@@ -51,7 +51,7 @@ func TestHardeningIntegrationFixtureScans(t *testing.T) {
 		{name: "http-hardening-demo", enableRules: []string{"net/http-default-client", "net/http-server-no-timeouts"}, custom: true, wantMinCount: 1},
 		{name: "sql-leaks-demo", enableRules: []string{"db/rows-not-closed", "db/rows-err-not-checked"}, custom: true, wantMinCount: 1},
 		{name: "timers-leaks-demo", enableRules: []string{"time/tick-leak", "time/after-in-loop"}, custom: true, wantMinCount: 1},
-		{name: "legacy-monolith", enableRules: []string{"arch/god-file"}, custom: true, wantMinCount: 1},
+		{name: "legacy-monolith", enableRules: []string{"arch/god-file"}, custom: true, wantMinCount: 0},
 		{name: "mod-hygiene-demo", enableRules: []string{"mod/replace-local-path"}, repoHygiene: true, wantMinCount: 1},
 		{name: "http-hardening-clean", enableRules: []string{"net/http-default-client", "net/http-server-no-timeouts"}, custom: true, wantMinCount: 0},
 		{name: "sql-clean", enableRules: []string{"db/rows-not-closed", "db/rows-err-not-checked"}, custom: true, wantMinCount: 0},

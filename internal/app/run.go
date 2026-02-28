@@ -24,7 +24,11 @@ const (
 	ExitFatal   = 3
 )
 
-var Version = "dev"
+var version = "dev"
+
+func Version() string {
+	return version
+}
 
 func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) int {
 	cli, err := parseArgs(args)
@@ -34,7 +38,7 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 	}
 
 	if cli.version {
-		fmt.Fprintln(stdout, Version)
+		fmt.Fprintln(stdout, Version())
 		return ExitSuccess
 	}
 

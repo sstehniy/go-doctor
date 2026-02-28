@@ -73,8 +73,6 @@ func Score(diagnostics []model.Diagnostic, enabled bool) Result {
 		grade = "Good"
 	case score >= 50:
 		grade = "Needs work"
-	default:
-		grade = "Critical"
 	}
 
 	return Result{
