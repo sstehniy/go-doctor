@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -52,106 +51,128 @@ func normalizeVersion(value string) string {
 }
 
 func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) int {
-	cli, err := parseArgs(args)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
+	state := newCommandState(ctx, stdout, stderr)
+	cmd := state.rootCommand()
+	cmd.SetArgs(normalizeArgs(args))
+
+	if err := cmd.Execute(); err != nil {
+		return renderCommandError(stderr, err)
+	}
+	return state.exitCode
+}
+
+func renderCommandError(stderr io.Writer, err error) int {
+	var usageErr *usageError
+	if errors.As(err, &usageErr) {
+		fmt.Fprintln(stderr, usageErr)
+		fmt.Fprintln(stderr, usageHint)
 		return ExitUsage
 	}
+	fmt.Fprintln(stderr, err)
+	return ExitFatal
+}
 
-	if cli.version {
-		fmt.Fprintln(stdout, Version())
-		return ExitSuccess
+func (state *commandState) executeRoot() error {
+	if state.cli.version {
+		fmt.Fprintln(state.stdout, Version())
+		state.exitCode = ExitSuccess
+		return nil
 	}
 
 	rules := godoctor.ListRules()
 	selectors := godoctor.ListRuleSelectors()
-	if cli.listRules {
+	if state.cli.listRules {
 		if len(rules) == 0 {
-			fmt.Fprintln(stdout, "no rules registered")
-			return ExitSuccess
+			fmt.Fprintln(state.stdout, "no rules registered")
+			state.exitCode = ExitSuccess
+			return nil
 		}
 		for _, rule := range rules {
-			fmt.Fprintln(stdout, rule)
+			fmt.Fprintln(state.stdout, rule)
 		}
-		return ExitSuccess
+		state.exitCode = ExitSuccess
+		return nil
 	}
 
 	opts := cfgpkg.DefaultOptions()
-	configFile, configPath, err := cfgpkg.Load(cli.target, cli.configPath, selectors)
+	configFile, configPath, err := cfgpkg.Load(state.cli.target, state.cli.configPath, selectors)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return ExitUsage
+		return newUsageError(err)
 	}
 	if err := configFile.Apply(&opts); err != nil {
-		fmt.Fprintln(stderr, err)
-		return ExitUsage
+		return newUsageError(err)
 	}
-	applyCLIOverrides(&opts, cli)
-	resolveRelativePaths(&opts, configPath, cli)
+	applyCLIOverrides(&opts, state.cli)
+	resolveRelativePaths(&opts, configPath, state.cli)
 
 	if err := cfgpkg.ValidateFormat(opts.Format); err != nil {
-		fmt.Fprintln(stderr, err)
-		return ExitUsage
+		return newUsageError(err)
 	}
 	if err := cfgpkg.ValidateFailOn(opts.FailOn); err != nil {
-		fmt.Fprintln(stderr, err)
-		return ExitUsage
+		return newUsageError(err)
 	}
 	if err := cfgpkg.ValidateDiffGovulncheck(opts.DiffGovulncheck); err != nil {
-		fmt.Fprintln(stderr, err)
-		return ExitUsage
+		return newUsageError(err)
 	}
 	if err := cfgpkg.ValidateRuleSelections(opts.EnableRules, opts.DisableRules, selectors); err != nil {
-		fmt.Fprintln(stderr, err)
-		return ExitUsage
+		return newUsageError(err)
 	}
 
-	result, err := godoctor.Diagnose(ctx, cli.target, opts)
+	result, err := godoctor.Diagnose(state.ctx, state.cli.target, opts)
 	if err != nil {
 		if result.SchemaVersion != 0 {
-			rendered, renderErr := renderOutput(result, opts, stdout)
+			rendered, renderErr := renderOutput(result, opts, state.stdout)
 			if renderErr == nil && len(rendered) > 0 {
-				if _, writeErr := stdout.Write(rendered); writeErr != nil {
-					fmt.Fprintln(stderr, writeErr)
-					return ExitFatal
+				if _, writeErr := state.stdout.Write(rendered); writeErr != nil {
+					fmt.Fprintln(state.stderr, writeErr)
+					state.exitCode = ExitFatal
+					return nil
 				}
 				if opts.OutputPath != "" {
 					if writeErr := os.WriteFile(opts.OutputPath, rendered, 0o644); writeErr != nil {
-						fmt.Fprintln(stderr, writeErr)
-						return ExitFatal
+						fmt.Fprintln(state.stderr, writeErr)
+						state.exitCode = ExitFatal
+						return nil
 					}
 				}
 			}
 		}
-		fmt.Fprintln(stderr, err)
+		fmt.Fprintln(state.stderr, err)
 		if errors.Is(err, context.DeadlineExceeded) {
-			return ExitFatal
+			state.exitCode = ExitFatal
+			return nil
 		}
-		return ExitFatal
+		state.exitCode = ExitFatal
+		return nil
 	}
 
-	rendered, err := renderOutput(result, opts, stdout)
+	rendered, err := renderOutput(result, opts, state.stdout)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return ExitFatal
+		fmt.Fprintln(state.stderr, err)
+		state.exitCode = ExitFatal
+		return nil
 	}
 	if len(rendered) > 0 {
-		if _, err := stdout.Write(rendered); err != nil {
-			fmt.Fprintln(stderr, err)
-			return ExitFatal
+		if _, err := state.stdout.Write(rendered); err != nil {
+			fmt.Fprintln(state.stderr, err)
+			state.exitCode = ExitFatal
+			return nil
 		}
 	}
 	if opts.OutputPath != "" && len(rendered) > 0 {
 		if err := os.WriteFile(opts.OutputPath, rendered, 0o644); err != nil {
-			fmt.Fprintln(stderr, err)
-			return ExitFatal
+			fmt.Fprintln(state.stderr, err)
+			state.exitCode = ExitFatal
+			return nil
 		}
 	}
 
 	if breachesThreshold(result, opts.FailOn) {
-		return ExitFailure
+		state.exitCode = ExitFailure
+		return nil
 	}
-	return ExitSuccess
+	state.exitCode = ExitSuccess
+	return nil
 }
 
 type cliInput struct {
@@ -177,52 +198,6 @@ type cliInput struct {
 	listRules   bool
 	version     bool
 	quiet       bool
-}
-
-func parseArgs(args []string) (cliInput, error) {
-	cli := cliInput{
-		target:   ".",
-		explicit: map[string]bool{},
-	}
-
-	fs := flag.NewFlagSet("go-doctor", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	fs.StringVar(&cli.configPath, "config", "", "")
-	fs.StringVar(&cli.format, "format", "", "")
-	fs.StringVar(&cli.output, "output", "", "")
-	fs.BoolVar(&cli.verbose, "verbose", false, "")
-	fs.BoolVar(&cli.noScore, "no-score", false, "")
-	fs.StringVar(&cli.failOn, "fail-on", "", "")
-	fs.StringVar(&cli.diff, "diff", "", "")
-	fs.StringVar(&cli.diffGovuln, "diff-govulncheck", "", "")
-	fs.Var(&cli.packages, "packages", "")
-	fs.Var(&cli.modules, "modules", "")
-	fs.Var(&cli.timeout, "timeout", "")
-	fs.IntVar(&cli.concurrency, "concurrency", 0, "")
-	fs.Var(&cli.enable, "enable", "")
-	fs.Var(&cli.disable, "disable", "")
-	fs.StringVar(&cli.baseline, "baseline", "", "")
-	fs.BoolVar(&cli.noBaseline, "no-baseline", false, "")
-	fs.BoolVar(&cli.listRules, "list-rules", false, "")
-	fs.BoolVar(&cli.version, "version", false, "")
-	fs.BoolVar(&cli.quiet, "quiet", false, "")
-
-	if err := fs.Parse(normalizeArgs(args)); err != nil {
-		return cli, err
-	}
-	fs.Visit(func(f *flag.Flag) {
-		cli.explicit[f.Name] = true
-	})
-
-	remaining := fs.Args()
-	if len(remaining) > 1 {
-		return cli, fmt.Errorf("expected at most one target path")
-	}
-	if len(remaining) == 1 {
-		cli.target = remaining[0]
-	}
-
-	return cli, nil
 }
 
 func applyCLIOverrides(opts *godoctor.Options, cli cliInput) {
@@ -389,6 +364,10 @@ func (l *csvList) String() string {
 	return strings.Join(*l, ",")
 }
 
+func (l *csvList) Type() string {
+	return "csv"
+}
+
 func (l *csvList) Set(value string) error {
 	for _, item := range strings.Split(value, ",") {
 		item = strings.TrimSpace(item)
@@ -406,6 +385,10 @@ type durationFlag struct {
 
 func (d *durationFlag) String() string {
 	return d.Duration.String()
+}
+
+func (d *durationFlag) Type() string {
+	return "duration"
 }
 
 func (d *durationFlag) Set(value string) error {

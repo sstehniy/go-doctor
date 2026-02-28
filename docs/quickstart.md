@@ -32,12 +32,27 @@ From a release archive:
 go-doctor .
 ```
 
+See all flags and examples:
+
+```bash
+go-doctor --help
+```
+
+Generated CLI reference: [cli/go-doctor.md](./cli/go-doctor.md)
+
 ## Output formats
 
 ```bash
 go-doctor --format text .
 go-doctor --format json .
 go-doctor --format sarif --output results.sarif .
+```
+
+## Shell completion
+
+```bash
+go-doctor completion bash
+go-doctor completion zsh
 ```
 
 ## Diff mode
