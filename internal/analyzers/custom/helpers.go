@@ -10,7 +10,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/stanislavstehniy/go-doctor/internal/model"
+	"github.com/sstehniy/go-doctor/internal/model"
 )
 
 func (c *analysisContext) shouldVisitDir(relDir string) bool {

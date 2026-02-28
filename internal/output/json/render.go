@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/stanislavstehniy/go-doctor/pkg/godoctor"
+	"github.com/sstehniy/go-doctor/pkg/godoctor"
 )
 
 func Render(result godoctor.DiagnoseResult) ([]byte, error) {

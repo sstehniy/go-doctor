@@ -9,17 +9,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stanislavstehniy/go-doctor/internal/analyzers/custom"
-	"github.com/stanislavstehniy/go-doctor/internal/analyzers/repohygiene"
-	"github.com/stanislavstehniy/go-doctor/internal/analyzers/thirdparty"
-	"github.com/stanislavstehniy/go-doctor/internal/baseline"
-	"github.com/stanislavstehniy/go-doctor/internal/diagnostics"
-	"github.com/stanislavstehniy/go-doctor/internal/diff"
-	"github.com/stanislavstehniy/go-doctor/internal/discovery"
-	"github.com/stanislavstehniy/go-doctor/internal/model"
-	sarifoutput "github.com/stanislavstehniy/go-doctor/internal/output/sarif"
-	"github.com/stanislavstehniy/go-doctor/internal/scoring"
-	"github.com/stanislavstehniy/go-doctor/internal/suppressions"
+	"github.com/sstehniy/go-doctor/internal/analyzers/custom"
+	"github.com/sstehniy/go-doctor/internal/analyzers/repohygiene"
+	"github.com/sstehniy/go-doctor/internal/analyzers/thirdparty"
+	"github.com/sstehniy/go-doctor/internal/baseline"
+	"github.com/sstehniy/go-doctor/internal/diagnostics"
+	"github.com/sstehniy/go-doctor/internal/diff"
+	"github.com/sstehniy/go-doctor/internal/discovery"
+	"github.com/sstehniy/go-doctor/internal/model"
+	sarifoutput "github.com/sstehniy/go-doctor/internal/output/sarif"
+	"github.com/sstehniy/go-doctor/internal/scoring"
+	"github.com/sstehniy/go-doctor/internal/suppressions"
 )
 
 type Options struct {

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stanislavstehniy/go-doctor/pkg/godoctor"
+	"github.com/sstehniy/go-doctor/pkg/godoctor"
 )
 
 func TestRenderQuietHealthyReturnsNil(t *testing.T) {

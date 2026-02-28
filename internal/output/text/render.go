@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/stanislavstehniy/go-doctor/pkg/godoctor"
+	"github.com/sstehniy/go-doctor/pkg/godoctor"
 )
 
 const defaultMaxCompactFiles = 3

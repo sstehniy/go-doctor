@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stanislavstehniy/go-doctor/internal/diagnostics"
+	"github.com/sstehniy/go-doctor/internal/diagnostics"
 )
 
 func TestCustomRuleFixtures(t *testing.T) {

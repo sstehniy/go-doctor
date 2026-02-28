@@ -45,7 +45,7 @@ jobs:
           mkdir -p dist release unpacked
           GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}" CGO_ENABLED=0 \
             go build -trimpath \
-              -ldflags="-s -w -X github.com/stanislavstehniy/go-doctor/internal/app.version=smoke" \
+              -ldflags="-s -w -X github.com/sstehniy/go-doctor/internal/app.version=smoke" \
               -o "dist/${{ matrix.binary }}" \
               ./cmd/go-doctor
 

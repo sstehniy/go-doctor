@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/stanislavstehniy/go-doctor/internal/diagnostics"
-	"github.com/stanislavstehniy/go-doctor/internal/model"
+	"github.com/sstehniy/go-doctor/internal/diagnostics"
+	"github.com/sstehniy/go-doctor/internal/model"
 )
 
 func toolFailure(name string, err error) diagnostics.Result {

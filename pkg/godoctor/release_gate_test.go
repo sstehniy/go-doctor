@@ -3,7 +3,7 @@ package godoctor
 import (
 	"testing"
 
-	"github.com/stanislavstehniy/go-doctor/internal/analyzers/custom"
+	"github.com/sstehniy/go-doctor/internal/analyzers/custom"
 )
 
 func TestReleaseGateCustomRuleCoverage(t *testing.T) {

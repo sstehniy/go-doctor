@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stanislavstehniy/go-doctor/internal/analyzers/thirdparty"
-	"github.com/stanislavstehniy/go-doctor/internal/model"
+	"github.com/sstehniy/go-doctor/internal/analyzers/thirdparty"
+	"github.com/sstehniy/go-doctor/internal/model"
 )
 
 func TestNormalizationFixtures(t *testing.T) {

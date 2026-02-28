@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/stanislavstehniy/go-doctor/internal/model"
+	"github.com/sstehniy/go-doctor/internal/model"
 )
 
 const (
@@ -51,7 +51,7 @@ func Render(input Input) ([]byte, error) {
 		Tool: sarifTool{
 			Driver: sarifDriver{
 				Name:           "go-doctor",
-				InformationURI: "https://github.com/stanislavstehniy/go-doctor",
+				InformationURI: "https://github.com/sstehniy/go-doctor",
 				Rules:          rules,
 			},
 		},
