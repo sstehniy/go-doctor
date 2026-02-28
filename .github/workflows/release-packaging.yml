@@ -52,6 +52,7 @@ jobs:
           if [[ -z "${version}" || "${version}" == "main" || "${version}" == "master" ]]; then
             version="dev-${GITHUB_SHA::8}"
           fi
+          version="${version//\//-}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
       - name: Build release binary
@@ -91,8 +92,20 @@ jobs:
           name: go-doctor-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ steps.archive.outputs.archive }}
 
-      - name: Attach artifact to GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
+  publish-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [package]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: go-doctor-*
+          merge-multiple: true
+          path: release
+
+      - name: Attach artifacts to GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.archive.outputs.archive }}
+          files: release/*
+          fail_on_unmatched_files: true
