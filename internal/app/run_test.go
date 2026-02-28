@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"testing"
 
@@ -36,6 +37,42 @@ func TestRunTextOutputSingleModule(t *testing.T) {
 	}
 	if !strings.Contains(output, "100 / 100") || !strings.Contains(output, "Excellent") {
 		t.Fatalf("expected score, got %q", output)
+	}
+}
+
+func TestVersionUsesLDFlagsValueWhenPresent(t *testing.T) {
+	previousVersion := version
+	previousReadBuildInfo := readBuildInfo
+	t.Cleanup(func() {
+		version = previousVersion
+		readBuildInfo = previousReadBuildInfo
+	})
+
+	version = "v1.2.3"
+	readBuildInfo = func() (*debug.BuildInfo, bool) {
+		return &debug.BuildInfo{Main: debug.Module{Version: "v9.9.9"}}, true
+	}
+
+	if got := Version(); got != "1.2.3" {
+		t.Fatalf("expected 1.2.3, got %q", got)
+	}
+}
+
+func TestVersionUsesBuildInfoWhenDefaultVersionIsDev(t *testing.T) {
+	previousVersion := version
+	previousReadBuildInfo := readBuildInfo
+	t.Cleanup(func() {
+		version = previousVersion
+		readBuildInfo = previousReadBuildInfo
+	})
+
+	version = "dev"
+	readBuildInfo = func() (*debug.BuildInfo, bool) {
+		return &debug.BuildInfo{Main: debug.Module{Version: "v0.1.2"}}, true
+	}
+
+	if got := Version(); got != "0.1.2" {
+		t.Fatalf("expected 0.1.2, got %q", got)
 	}
 }
 

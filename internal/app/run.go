@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -25,9 +26,29 @@ const (
 )
 
 var version = "dev"
+var readBuildInfo = debug.ReadBuildInfo
 
 func Version() string {
-	return version
+	if resolved := normalizeVersion(version); resolved != "dev" {
+		return resolved
+	}
+	if info, ok := readBuildInfo(); ok {
+		if resolved := normalizeVersion(info.Main.Version); resolved != "dev" {
+			return resolved
+		}
+	}
+	return "dev"
+}
+
+func normalizeVersion(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "dev"
+	}
+	if strings.EqualFold(trimmed, "(devel)") || strings.EqualFold(trimmed, "devel") || strings.EqualFold(trimmed, "dev") {
+		return "dev"
+	}
+	return strings.TrimPrefix(trimmed, "v")
 }
 
 func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) int {
