@@ -68,10 +68,9 @@ Recommended ruleset values for `main`:
 - Required approving reviews: `0`
 - Require status checks to pass: enabled
 - Required status check: `release-smoke-gate`
-- Required status check: `owner-approval-gate`
 
 Notes:
 
 - `release-smoke-gate` passes only when all smoke matrix jobs pass.
-- `owner-approval-gate` requires owner approval for PRs opened by non-owners.
-- Owner-authored PRs pass `owner-approval-gate` without extra reviewer.
+- GitHub does not support counting self-approval on pull requests.
+  Keep required approvals at `0` if admins must be able to merge their own PRs.
