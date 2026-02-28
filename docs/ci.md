@@ -42,3 +42,12 @@ A full runnable example is in [examples/go-doctor-sarif-workflow.yml](./examples
 - `--fail-on info`: fails on any unsuppressed finding.
 - `--fail-on warning`: fails on warning/error unsuppressed findings.
 - `--fail-on error`: fails on error unsuppressed findings.
+
+## Release packaging
+
+- `release-smoke` validates binary build, packaging, unpacking, and startup on pull requests and `main`.
+- `release-packaging` builds release archives for:
+  - `linux/amd64`, `linux/arm64`
+  - `darwin/amd64`, `darwin/arm64`
+  - `windows/amd64`, `windows/arm64`
+- `release-packaging` runs on `v*` tags and uploads artifacts to GitHub Releases.

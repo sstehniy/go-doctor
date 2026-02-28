@@ -74,3 +74,18 @@ jobs:
 
           "$bin" --config .go-doctor-smoke.yaml testdata/fixtures/integration/clean-service > smoke-output.txt
           grep -q "healthy: no findings" smoke-output.txt
+
+  release-smoke-gate:
+    name: release-smoke-gate
+    needs: [smoke]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce matrix success
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ needs.smoke.result }}" != "success" ]]; then
+            echo "release-smoke matrix failed with status: ${{ needs.smoke.result }}"
+            exit 1
+          fi

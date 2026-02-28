@@ -37,6 +37,18 @@ Run on the current repo:
 go run ./cmd/go-doctor .
 ```
 
+Install with `go install`:
+
+```bash
+go install github.com/stanislavstehniy/go-doctor/cmd/go-doctor@latest
+```
+
+Install a pinned version:
+
+```bash
+go install github.com/stanislavstehniy/go-doctor/cmd/go-doctor@v1.2.3
+```
+
 Machine-readable output:
 
 ```bash
