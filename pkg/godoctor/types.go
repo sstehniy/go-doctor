@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/stanislavstehniy/go-doctor/internal/analyzers/custom"
 	"github.com/stanislavstehniy/go-doctor/internal/analyzers/repohygiene"
 	"github.com/stanislavstehniy/go-doctor/internal/analyzers/thirdparty"
+	"github.com/stanislavstehniy/go-doctor/internal/baseline"
 	"github.com/stanislavstehniy/go-doctor/internal/diagnostics"
 	"github.com/stanislavstehniy/go-doctor/internal/discovery"
 	"github.com/stanislavstehniy/go-doctor/internal/model"
@@ -150,11 +153,16 @@ func Diagnose(ctx context.Context, target string, opts Options) (DiagnoseResult,
 	diagnosticsOut, toolErrors := diagnostics.Run(ctx, analyzers, targetSpec, opts.Concurrency, perAnalyzerTimeout)
 	result.Diagnostics = diagnosticsOut
 	result.ToolErrors = toolErrors
-	score = scoring.Score(len(diagnosticsOut), opts.Score)
-	result.ElapsedMillis = time.Since(start).Milliseconds()
 	if len(analyzers) > 0 && len(diagnosticsOut) == 0 && len(toolErrors) >= len(analyzers) {
+		result.ElapsedMillis = time.Since(start).Milliseconds()
 		return result, fmt.Errorf("all analyzers failed")
 	}
+	if err := applyBaseline(&result, opts); err != nil {
+		result.ElapsedMillis = time.Since(start).Milliseconds()
+		return result, err
+	}
+	score = scoring.Score(activeDiagnosticCount(result.Diagnostics), opts.Score)
+	result.ElapsedMillis = time.Since(start).Milliseconds()
 
 	if score.Enabled {
 		result.Score = &ScoreResult{
@@ -224,4 +232,63 @@ func uniqueSorted(values []string) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+func applyBaseline(result *DiagnoseResult, opts Options) error {
+	if opts.NoBaseline || opts.BaselinePath == "" {
+		return nil
+	}
+
+	exists, err := baseline.Exists(opts.BaselinePath)
+	if err != nil {
+		return err
+	}
+	if exists {
+		_, set, err := baseline.Load(opts.BaselinePath)
+		if err != nil {
+			return err
+		}
+		result.Diagnostics = baseline.Apply(result.Diagnostics, set)
+		return nil
+	}
+
+	if ciEnabled() {
+		return fmt.Errorf("baseline file %q does not exist in CI", opts.BaselinePath)
+	}
+	if len(result.ToolErrors) > 0 {
+		return nil
+	}
+	if err := baseline.Write(opts.BaselinePath, result.Diagnostics); err != nil {
+		return err
+	}
+	_, set, err := baseline.Load(opts.BaselinePath)
+	if err != nil {
+		return err
+	}
+	result.Diagnostics = baseline.Apply(result.Diagnostics, set)
+	return nil
+}
+
+func activeDiagnosticCount(diagnostics []model.Diagnostic) int {
+	count := 0
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Suppressed {
+			continue
+		}
+		count++
+	}
+	return count
+}
+
+func ciEnabled() bool {
+	value, ok := os.LookupEnv("CI")
+	if !ok {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
 }

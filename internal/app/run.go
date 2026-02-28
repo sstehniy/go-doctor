@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -51,7 +52,7 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 	}
 
 	opts := cfgpkg.DefaultOptions()
-	configFile, _, err := cfgpkg.Load(cli.target, cli.configPath, selectors)
+	configFile, configPath, err := cfgpkg.Load(cli.target, cli.configPath, selectors)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return ExitUsage
@@ -61,6 +62,7 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 		return ExitUsage
 	}
 	applyCLIOverrides(&opts, cli)
+	resolveRelativePaths(&opts, configPath, cli)
 
 	if err := cfgpkg.ValidateFormat(opts.Format); err != nil {
 		fmt.Fprintln(stderr, err)
@@ -261,6 +263,9 @@ func breachesThreshold(result godoctor.DiagnoseResult, failOn string) bool {
 		return false
 	}
 	for _, diagnostic := range result.Diagnostics {
+		if diagnostic.Suppressed {
+			continue
+		}
 		if severityRank(diagnostic.Severity) >= severityRank(failOn) {
 			return true
 		}
@@ -308,4 +313,11 @@ func (d *durationFlag) String() string {
 
 func (d *durationFlag) Set(value string) error {
 	return d.Duration.Set(value)
+}
+
+func resolveRelativePaths(opts *godoctor.Options, configPath string, cli cliInput) {
+	if cli.explicit["baseline"] || configPath == "" || opts.BaselinePath == "" || filepath.IsAbs(opts.BaselinePath) {
+		return
+	}
+	opts.BaselinePath = filepath.Join(filepath.Dir(configPath), opts.BaselinePath)
 }

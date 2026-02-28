@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stanislavstehniy/go-doctor/internal/baseline"
+	"github.com/stanislavstehniy/go-doctor/internal/model"
 )
 
 func TestRunTextOutputSingleModule(t *testing.T) {
@@ -108,6 +111,191 @@ func TestRunJSONOutputRepoHygiene(t *testing.T) {
 	}
 }
 
+func TestRunGeneratesBaselineAndSuppressesCurrentFindings(t *testing.T) {
+	repo := writeRepoHygieneFixture(t)
+	configPath := writeRepoOnlyConfig(t)
+	baselinePath := filepath.Join(t.TempDir(), "artifacts", "baseline.json")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(
+		context.Background(),
+		[]string{"--config", configPath, "--format=json", "--baseline", baselinePath, "--fail-on=info", "--enable=fmt/not-gofmt,license/missing", repo},
+		&stdout,
+		&stderr,
+	)
+	if code != ExitSuccess {
+		t.Fatalf("expected success, got %d: %s", code, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+
+	var payload struct {
+		Diagnostics []struct {
+			Rule       string `json:"rule"`
+			Suppressed bool   `json:"suppressed"`
+		} `json:"diagnostics"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal json: %v", err)
+	}
+	if len(payload.Diagnostics) != 2 {
+		t.Fatalf("expected 2 diagnostics, got %d", len(payload.Diagnostics))
+	}
+	for _, diagnostic := range payload.Diagnostics {
+		if !diagnostic.Suppressed {
+			t.Fatalf("expected generated baseline to suppress %s", diagnostic.Rule)
+		}
+	}
+
+	file, _, err := baseline.Load(baselinePath)
+	if err != nil {
+		t.Fatalf("load baseline: %v", err)
+	}
+	if len(file.Entries) != 2 {
+		t.Fatalf("expected 2 baseline entries, got %d", len(file.Entries))
+	}
+}
+
+func TestRunCIBaselineFailsOnlyOnNewFindings(t *testing.T) {
+	t.Setenv("CI", "true")
+
+	repo := writeRepoHygieneFixture(t)
+	configPath := writeRepoOnlyConfig(t)
+	baselinePath := filepath.Join(t.TempDir(), "baseline.json")
+	if err := baseline.Write(baselinePath, []model.Diagnostic{
+		{
+			Rule:      "license/missing",
+			Path:      "go.mod",
+			Line:      1,
+			Column:    1,
+			EndLine:   1,
+			EndColumn: 1,
+			Message:   "repository is missing a license file",
+		},
+	}); err != nil {
+		t.Fatalf("write baseline: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(
+		context.Background(),
+		[]string{"--config", configPath, "--format=json", "--baseline", baselinePath, "--fail-on=info", "--enable=fmt/not-gofmt,license/missing", repo},
+		&stdout,
+		&stderr,
+	)
+	if code != ExitFailure {
+		t.Fatalf("expected failure for new finding, got %d: %s", code, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+
+	var payload struct {
+		Diagnostics []struct {
+			Rule       string `json:"rule"`
+			Suppressed bool   `json:"suppressed"`
+		} `json:"diagnostics"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal json: %v", err)
+	}
+	if len(payload.Diagnostics) != 2 {
+		t.Fatalf("expected 2 diagnostics, got %d", len(payload.Diagnostics))
+	}
+
+	var suppressed int
+	for _, diagnostic := range payload.Diagnostics {
+		if diagnostic.Suppressed {
+			suppressed++
+		}
+	}
+	if suppressed != 1 {
+		t.Fatalf("expected exactly one suppressed finding, got %d", suppressed)
+	}
+}
+
+func TestRunCIMissingBaselineFailsFatal(t *testing.T) {
+	t.Setenv("CI", "true")
+
+	repo := writeRepoHygieneFixture(t)
+	configPath := writeRepoOnlyConfig(t)
+	baselinePath := filepath.Join(t.TempDir(), "missing-baseline.json")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(
+		context.Background(),
+		[]string{"--config", configPath, "--baseline", baselinePath, "--enable=license/missing", repo},
+		&stdout,
+		&stderr,
+	)
+	if code != ExitFatal {
+		t.Fatalf("expected fatal exit, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "does not exist in CI") {
+		t.Fatalf("expected CI baseline error, got %q", stderr.String())
+	}
+}
+
+func TestRunNoBaselineDisablesExistingBaseline(t *testing.T) {
+	t.Setenv("CI", "true")
+
+	repo := writeRepoHygieneFixture(t)
+	configPath := writeRepoOnlyConfig(t)
+	baselinePath := filepath.Join(t.TempDir(), "baseline.json")
+	if err := baseline.Write(baselinePath, []model.Diagnostic{
+		{
+			Rule:      "license/missing",
+			Path:      "go.mod",
+			Line:      1,
+			Column:    1,
+			EndLine:   1,
+			EndColumn: 1,
+			Message:   "repository is missing a license file",
+		},
+		{
+			Rule:      "fmt/not-gofmt",
+			Path:      "main.go",
+			Line:      1,
+			Column:    1,
+			EndLine:   1,
+			EndColumn: 1,
+			Message:   "file is not gofmt formatted",
+		},
+	}); err != nil {
+		t.Fatalf("write baseline: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(
+		context.Background(),
+		[]string{"--config", configPath, "--format=json", "--baseline", baselinePath, "--no-baseline", "--fail-on=info", "--enable=fmt/not-gofmt,license/missing", repo},
+		&stdout,
+		&stderr,
+	)
+	if code != ExitFailure {
+		t.Fatalf("expected failure when baseline is disabled, got %d: %s", code, stderr.String())
+	}
+
+	var payload struct {
+		Diagnostics []struct {
+			Suppressed bool `json:"suppressed"`
+		} `json:"diagnostics"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal json: %v", err)
+	}
+	for _, diagnostic := range payload.Diagnostics {
+		if diagnostic.Suppressed {
+			t.Fatal("expected no diagnostics to be suppressed when --no-baseline is set")
+		}
+	}
+}
+
 func writeNoAnalyzerConfig(t *testing.T) string {
 	t.Helper()
 
@@ -126,4 +314,17 @@ func writeRepoOnlyConfig(t *testing.T) string {
 		t.Fatalf("write config: %v", err)
 	}
 	return path
+}
+
+func writeRepoHygieneFixture(t *testing.T) string {
+	t.Helper()
+
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/repohygiene\n\ngo 1.22.0\n"), 0o644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nfunc main(){println(\"hi\")}\n"), 0o644); err != nil {
+		t.Fatalf("write main.go: %v", err)
+	}
+	return root
 }

@@ -55,7 +55,11 @@ func Render(result godoctor.DiagnoseResult, verbose bool, quiet bool) []byte {
 		b.WriteString("healthy: no findings\n\n")
 	} else {
 		for _, diagnostic := range result.Diagnostics {
-			fmt.Fprintf(&b, "%s [%s/%s] %s\n", diagnostic.Severity, diagnostic.Plugin, diagnostic.Rule, diagnostic.Message)
+			suffix := ""
+			if diagnostic.Suppressed {
+				suffix = " (suppressed)"
+			}
+			fmt.Fprintf(&b, "%s [%s/%s] %s%s\n", diagnostic.Severity, diagnostic.Plugin, diagnostic.Rule, diagnostic.Message, suffix)
 			if diagnostic.Path != "" {
 				fmt.Fprintf(&b, "path: %s:%d:%d\n", diagnostic.Path, diagnostic.Line, diagnostic.Column)
 			}
