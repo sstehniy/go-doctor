@@ -183,6 +183,8 @@ func TestRunJSONOutputRepoHygiene(t *testing.T) {
 }
 
 func TestRunGeneratesBaselineAndSuppressesCurrentFindings(t *testing.T) {
+	t.Setenv("CI", "false")
+
 	repo := writeRepoHygieneFixture(t)
 	configPath := writeRepoOnlyConfig(t)
 	baselinePath := filepath.Join(t.TempDir(), "artifacts", "baseline.json")

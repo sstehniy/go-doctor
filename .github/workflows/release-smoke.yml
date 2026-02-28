@@ -38,6 +38,12 @@ jobs:
           go-version-file: go.mod
           cache: false
 
+      - name: Run full test suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./...
+
       - name: Build and package binary
         shell: bash
         run: |

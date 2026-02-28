@@ -137,9 +137,17 @@ func normalizeDiagnosticPath(path string, repoRoot string) string {
 		return ""
 	}
 	cleaned := filepath.Clean(path)
+	cleanedRepoRoot := filepath.Clean(repoRoot)
 	if filepath.IsAbs(cleaned) {
-		if relative, err := filepath.Rel(repoRoot, cleaned); err == nil {
+		if relative, err := filepath.Rel(cleanedRepoRoot, cleaned); err == nil {
 			return model.NormalizePath(relative)
+		}
+	}
+	normalizedPath := model.NormalizePath(cleaned)
+	normalizedRoot := model.NormalizePath(cleanedRepoRoot)
+	if normalizedRoot != "" && normalizedRoot != "." {
+		if strings.HasPrefix(normalizedPath, normalizedRoot+"/") {
+			return strings.TrimPrefix(normalizedPath, normalizedRoot+"/")
 		}
 	}
 	return model.NormalizePath(cleaned)
