@@ -1,0 +1,76 @@
+name: release-smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            ext: tar.gz
+            binary: go-doctor
+          - runner: macos-latest
+            goos: darwin
+            goarch: amd64
+            ext: tar.gz
+            binary: go-doctor
+          - runner: windows-latest
+            goos: windows
+            goarch: amd64
+            ext: zip
+            binary: go-doctor.exe
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build and package binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist release unpacked
+          GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}" CGO_ENABLED=0 \
+            go build -trimpath \
+              -ldflags="-s -w -X github.com/stanislavstehniy/go-doctor/internal/app.Version=smoke" \
+              -o "dist/${{ matrix.binary }}" \
+              ./cmd/go-doctor
+
+          if [[ "${{ matrix.ext }}" == "zip" ]]; then
+            (cd dist && zip -q ../release/go-doctor.zip "${{ matrix.binary }}")
+            unzip -q release/go-doctor.zip -d unpacked
+          else
+            (cd dist && tar -czf ../release/go-doctor.tar.gz "${{ matrix.binary }}")
+            tar -xzf release/go-doctor.tar.gz -C unpacked
+          fi
+
+      - name: Smoke test binary startup and scan path
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="unpacked/${{ matrix.binary }}"
+          chmod +x "$bin" || true
+          "$bin" --version
+
+          printf '%s\n' \
+            'analyzers:' \
+            '  repo: false' \
+            '  thirdParty: false' \
+            '  custom: false' > .go-doctor-smoke.yaml
+
+          "$bin" --config .go-doctor-smoke.yaml testdata/fixtures/integration/clean-service > smoke-output.txt
+          grep -q "healthy: no findings" smoke-output.txt

@@ -1,6 +1,8 @@
 .DS_Store
 bin/
 dist/
+artifacts/
+go-doctor
 coverage.out
 *.test
 *.exe

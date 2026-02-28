@@ -1,0 +1,8 @@
+github.com/spf13/cobra
+github.com/go-chi/chi
+github.com/sirupsen/logrus
+github.com/hashicorp/raft
+github.com/gofiber/fiber
+github.com/uber-go/zap
+github.com/grpc/grpc-go
+github.com/prometheus/client_golang

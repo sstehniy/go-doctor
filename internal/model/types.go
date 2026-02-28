@@ -1,6 +1,9 @@
 package model
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"strings"
+)
 
 type Diagnostic struct {
 	Path      string `json:"path,omitempty"`
@@ -32,5 +35,6 @@ type ToolError struct {
 }
 
 func NormalizePath(path string) string {
+	path = strings.ReplaceAll(path, "\\", "/")
 	return filepath.ToSlash(filepath.Clean(path))
 }

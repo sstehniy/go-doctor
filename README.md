@@ -23,6 +23,8 @@ It is intentionally focused on practical issues that can prevent incidents and r
 
 ## Quick Start
 
+Detailed quickstart: [docs/quickstart.md](./docs/quickstart.md)
+
 Build from source:
 
 ```bash
@@ -115,6 +117,8 @@ jobs:
 Full end-to-end example:
 [docs/examples/go-doctor-sarif-workflow.yml](./docs/examples/go-doctor-sarif-workflow.yml)
 
+CI usage guide: [docs/ci.md](./docs/ci.md)
+
 ## Baseline-First Adoption (Recommended)
 
 For mature repos, adopt with a baseline first so legacy findings are visible but do not block rollout.
@@ -186,6 +190,15 @@ Built-in repo-level rules include:
 - Config auto-discovery order: `.go-doctor.yaml`, `.go-doctor.yml`, `.go-doctor.json`.
 - `scan.baseline` or `--baseline` enables baseline filtering.
 - In CI (`CI=true`), baseline path must exist unless `--no-baseline` is set.
+- Third-party analyzer support policy: Go `1.21+`.
+
+Config schema reference: [docs/config-schema.md](./docs/config-schema.md)
+
+Rule catalog: [docs/rules.md](./docs/rules.md)
+
+Performance and profiling notes: [docs/performance.md](./docs/performance.md)
+
+Release gate checklist: [docs/release-gate-v1.md](./docs/release-gate-v1.md)
 
 ## Out of Scope
 

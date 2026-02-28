@@ -226,7 +226,14 @@ func Diagnose(ctx context.Context, target string, opts Options) (DiagnoseResult,
 	}
 
 	perAnalyzerTimeout := defaultPerAnalyzerTimeout(opts.Timeout)
-	diagnosticsOut, toolErrors := diagnostics.Run(ctx, analyzers, targetSpec, opts.Concurrency, perAnalyzerTimeout)
+	diagnosticsOut, toolErrors := diagnostics.Run(
+		ctx,
+		analyzers,
+		targetSpec,
+		opts.Concurrency,
+		perAnalyzerTimeout,
+		diagnostics.DefaultRetryPolicy(),
+	)
 	result.Diagnostics = diagnosticsOut
 	result.ToolErrors = append(result.ToolErrors, toolErrors...)
 	if len(analyzers) > 0 && len(diagnosticsOut) == 0 && len(toolErrors) >= len(analyzers) {

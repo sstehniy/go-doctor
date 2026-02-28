@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/stanislavstehniy/go-doctor/internal/analyzers/thirdparty"
@@ -218,6 +219,110 @@ func TestFilterGeneratedDiagnosticsIncludesGeneratedWhenEnabled(t *testing.T) {
 	}, diagnosticsOut)
 	if len(filtered) != 1 {
 		t.Fatalf("expected generated diagnostic to remain when enabled, got %#v", filtered)
+	}
+}
+
+func TestParsersHandleMalformedOutput(t *testing.T) {
+	t.Run("govet ignores malformed lines", func(t *testing.T) {
+		output := "broken line\n/repo/main.go:10:2: printf format %d has arg x of wrong type string\n"
+		diagnosticsOut := thirdparty.ExportParseGoVetOutput(output, "/repo")
+		if len(diagnosticsOut) != 1 {
+			t.Fatalf("expected 1 parsed govet diagnostic, got %#v", diagnosticsOut)
+		}
+	})
+
+	t.Run("staticcheck json ignores malformed records", func(t *testing.T) {
+		output := "not-json\n" +
+			`{"code":"SA1000","message":"bad regexp","location":{"file":"/repo/main.go","line":8,"column":2},"end":{"line":8,"column":6}}`
+		diagnosticsOut := thirdparty.ExportParseStaticcheckJSON(output, "/repo")
+		if len(diagnosticsOut) != 1 {
+			t.Fatalf("expected 1 parsed staticcheck diagnostic, got %#v", diagnosticsOut)
+		}
+	})
+
+	t.Run("govulncheck ignores malformed lines", func(t *testing.T) {
+		output := "oops\n" +
+			`{"osv":{"id":"GO-2024-0001","details":"reachable vuln"}}` + "\n" +
+			`{"finding":{"osv":"GO-2024-0001","trace":[{"function":"pkg.Run","position":{"filename":"/repo/main.go","line":12,"column":3}}]}}`
+		diagnosticsOut := thirdparty.ExportParseGovulncheckJSON(output, "/repo")
+		if len(diagnosticsOut) != 1 {
+			t.Fatalf("expected 1 parsed govulncheck diagnostic, got %#v", diagnosticsOut)
+		}
+	})
+
+	t.Run("golangci malformed json returns parse error", func(t *testing.T) {
+		_, err := thirdparty.ExportParseGolangCIJSON("{bad", "/repo")
+		if err == nil {
+			t.Fatal("expected golangci parser error for malformed json")
+		}
+	})
+}
+
+func TestAdaptersReportMissingToolsFromPATH(t *testing.T) {
+	repoRoot := t.TempDir()
+	writeFile(t, filepath.Join(repoRoot, "go.mod"), "module example.com/missingtool\n\ngo 1.22.0\n")
+	writeFile(t, filepath.Join(repoRoot, "main.go"), "package main\nfunc main(){}\n")
+	t.Setenv("PATH", t.TempDir())
+
+	testCases := []struct {
+		name     string
+		enable   []string
+		toolName string
+	}{
+		{name: "govet", enable: []string{"govet"}, toolName: "go"},
+		{name: "staticcheck", enable: []string{"staticcheck"}, toolName: "staticcheck"},
+		{name: "govulncheck", enable: []string{"govulncheck"}, toolName: "govulncheck"},
+		{name: "golangci-lint", enable: []string{"errcheck"}, toolName: "golangci-lint"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			analyzers := thirdparty.ExportDefaultAnalyzers(
+				diagnostics.Target{GoVersion: "1.22"},
+				testCase.enable,
+				nil,
+			)
+			if len(analyzers) != 1 {
+				t.Fatalf("expected exactly one analyzer, got %d", len(analyzers))
+			}
+
+			result := analyzers[0].Run(context.Background(), diagnostics.Target{
+				RepoRoot:    repoRoot,
+				ModuleRoots: []string{repoRoot},
+				GoVersion:   "1.22",
+			})
+			if len(result.ToolErrors) != 1 {
+				t.Fatalf("expected one missing-tool error, got %#v", result.ToolErrors)
+			}
+			if !strings.Contains(result.ToolErrors[0].Message, "not installed or not on PATH") {
+				t.Fatalf("expected install guidance, got %#v", result.ToolErrors[0])
+			}
+			if !strings.Contains(result.ToolErrors[0].Message, testCase.toolName) {
+				t.Fatalf("expected tool name %q in message, got %#v", testCase.toolName, result.ToolErrors[0])
+			}
+		})
+	}
+}
+
+func TestDefaultAnalyzersUnsupportedGoVersion(t *testing.T) {
+	analyzers := thirdparty.ExportDefaultAnalyzers(diagnostics.Target{GoVersion: "1.19"}, nil, nil)
+	if len(analyzers) != 1 {
+		t.Fatalf("expected unsupported-version analyzer, got %d analyzers", len(analyzers))
+	}
+
+	result := analyzers[0].Run(context.Background(), diagnostics.Target{})
+	if len(result.ToolErrors) != 1 {
+		t.Fatalf("expected unsupported-version tool error, got %#v", result.ToolErrors)
+	}
+	if !strings.Contains(result.ToolErrors[0].Message, "unsupported Go version") {
+		t.Fatalf("expected unsupported version message, got %#v", result.ToolErrors[0])
+	}
+}
+
+func TestDefaultAnalyzersUnsupportedGoVersionWithNoThirdPartySelection(t *testing.T) {
+	analyzers := thirdparty.ExportDefaultAnalyzers(diagnostics.Target{GoVersion: "1.19"}, []string{"repo"}, nil)
+	if len(analyzers) != 0 {
+		t.Fatalf("expected no third-party analyzers for non-third-party selection, got %d", len(analyzers))
 	}
 }
 

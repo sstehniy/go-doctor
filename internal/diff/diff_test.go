@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/stanislavstehniy/go-doctor/internal/model"
 )
 
 func TestDiscoverExplicitBaseUsesMergeBaseAndDeletedFilesAffectPackages(t *testing.T) {
@@ -140,6 +142,31 @@ func TestDiscoverAutoWarnsAndFallsBackToFullScanWhenNoDiffSource(t *testing.T) {
 	}
 	if len(plan.Warnings) == 0 {
 		t.Fatalf("expected warning for full-scan fallback, got %#v", plan)
+	}
+}
+
+func TestPackageAndModulePatternsRouteGoWorkChangesAcrossWorkspace(t *testing.T) {
+	repoRoot := filepath.FromSlash("/repo")
+	moduleRoots := []string{
+		filepath.Join(repoRoot, "moda"),
+		filepath.Join(repoRoot, "modb"),
+	}
+	changes := []ChangedFile{
+		{Path: "go.work", Deleted: false},
+	}
+
+	gotPackages := packagePatterns(repoRoot, moduleRoots, changes)
+	if !slices.Equal(gotPackages, []string{"./..."}) {
+		t.Fatalf("unexpected package patterns: %#v", gotPackages)
+	}
+
+	gotModules := modulePatterns(repoRoot, moduleRoots, changes)
+	wantModules := []string{
+		model.NormalizePath(filepath.Join(repoRoot, "moda")),
+		model.NormalizePath(filepath.Join(repoRoot, "modb")),
+	}
+	if !slices.Equal(gotModules, wantModules) {
+		t.Fatalf("unexpected module patterns: %#v", gotModules)
 	}
 }
 

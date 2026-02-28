@@ -195,6 +195,47 @@ func TestCopyRepoSkipsVendor(t *testing.T) {
 	}
 }
 
+func TestRepoHygieneGoWorkRoutingForReplaceLocalPath(t *testing.T) {
+	root := t.TempDir()
+	writeWorkspaceFile(t, root, "go.work", "go 1.22.0\n\nuse (\n\t./moda\n\t./modb\n)\n\nreplace example.com/local => ../local\n")
+	writeWorkspaceFile(t, root, "moda/go.mod", "module example.com/moda\n\ngo 1.22.0\n")
+	writeWorkspaceFile(t, root, "moda/main.go", "package main\nfunc main(){}\n")
+	writeWorkspaceFile(t, root, "modb/go.mod", "module example.com/modb\n\ngo 1.22.0\n")
+	writeWorkspaceFile(t, root, "modb/main.go", "package main\nfunc main(){}\n")
+
+	target := diagnostics.Target{
+		RepoRoot:    root,
+		Mode:        "workspace",
+		ModuleRoots: []string{filepath.Join(root, "moda"), filepath.Join(root, "modb")},
+	}
+	analyzers := DefaultAnalyzers(target, []string{"mod/replace-local-path"}, nil)
+	if len(analyzers) != 1 {
+		t.Fatalf("expected one analyzer, got %d", len(analyzers))
+	}
+
+	result := analyzers[0].Run(context.Background(), target)
+	if len(result.ToolErrors) != 0 {
+		t.Fatalf("expected no tool errors, got %#v", result.ToolErrors)
+	}
+	if len(result.Diagnostics) != 1 {
+		t.Fatalf("expected one go.work finding, got %#v", result.Diagnostics)
+	}
+	if result.Diagnostics[0].Path != "go.work" {
+		t.Fatalf("expected go.work anchored diagnostic, got %#v", result.Diagnostics[0])
+	}
+}
+
+func writeWorkspaceFile(t *testing.T, root string, relative string, contents string) {
+	t.Helper()
+	path := filepath.Join(root, relative)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", relative, err)
+	}
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+		t.Fatalf("write %s: %v", relative, err)
+	}
+}
+
 func fixtureRoot(name string) string {
 	return filepath.Join("..", "..", "..", "testdata", "fixtures", "repo-hygiene", name)
 }

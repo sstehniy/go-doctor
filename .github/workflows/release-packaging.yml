@@ -1,0 +1,97 @@
+name: release-packaging
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: tar.gz
+          - goos: linux
+            goarch: arm64
+            ext: tar.gz
+          - goos: darwin
+            goarch: amd64
+            ext: tar.gz
+          - goos: darwin
+            goarch: arm64
+            ext: tar.gz
+          - goos: windows
+            goarch: amd64
+            ext: zip
+          - goos: windows
+            goarch: arm64
+            ext: zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Resolve version
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME}"
+          if [[ -z "${version}" || "${version}" == "main" || "${version}" == "master" ]]; then
+            version="dev-${GITHUB_SHA::8}"
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build release binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          binary="go-doctor"
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            binary="go-doctor.exe"
+          fi
+          GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}" CGO_ENABLED=0 \
+            go build -trimpath \
+              -ldflags="-s -w -X github.com/stanislavstehniy/go-doctor/internal/app.Version=${{ steps.meta.outputs.version }}" \
+              -o "dist/${binary}" \
+              ./cmd/go-doctor
+
+      - name: Package archive
+        id: archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          base="go-doctor_${{ steps.meta.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}"
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            archive="release/${base}.zip"
+            (cd dist && zip -q "../${archive}" go-doctor.exe)
+          else
+            archive="release/${base}.tar.gz"
+            (cd dist && tar -czf "../${archive}" go-doctor)
+          fi
+          echo "archive=${archive}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload packaging artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-doctor-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ steps.archive.outputs.archive }}
+
+      - name: Attach artifact to GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.archive.outputs.archive }}

@@ -2,6 +2,8 @@ package diagnostics
 
 import (
 	"context"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 type stubAnalyzer struct {
 	name   string
 	result Result
+	runFn  func(context.Context, Target) Result
 }
 
 func (s stubAnalyzer) Name() string {
@@ -22,6 +25,9 @@ func (stubAnalyzer) SupportsDiff() bool {
 }
 
 func (s stubAnalyzer) Run(ctx context.Context, target Target) Result {
+	if s.runFn != nil {
+		return s.runFn(ctx, target)
+	}
 	return s.result
 }
 
@@ -51,7 +57,7 @@ func TestRunSortsDiagnosticsAndToolErrors(t *testing.T) {
 		},
 	}
 
-	diagnosticsOut, toolErrors := Run(context.Background(), analyzers, Target{}, 4, 0)
+	diagnosticsOut, toolErrors := Run(context.Background(), analyzers, Target{}, 4, 0, RetryPolicy{})
 	if len(diagnosticsOut) != 2 {
 		t.Fatalf("expected 2 diagnostics, got %d", len(diagnosticsOut))
 	}
@@ -80,7 +86,7 @@ func TestRunStopsQueueingAfterContextCancellation(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		Run(ctx, analyzers, Target{}, 2, 0)
+		Run(ctx, analyzers, Target{}, 2, 0, RetryPolicy{})
 		close(done)
 	}()
 
@@ -88,5 +94,74 @@ func TestRunStopsQueueingAfterContextCancellation(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("Run blocked after context cancellation")
+	}
+}
+
+func TestRunEnforcesPerAnalyzerTimeout(t *testing.T) {
+	var calls atomic.Int32
+	analyzer := stubAnalyzer{
+		name: "slow",
+		runFn: func(ctx context.Context, target Target) Result {
+			calls.Add(1)
+			<-ctx.Done()
+			return Result{}
+		},
+	}
+
+	_, toolErrors := Run(
+		context.Background(),
+		[]Analyzer{analyzer},
+		Target{},
+		1,
+		20*time.Millisecond,
+		RetryPolicy{Attempts: 1, RetryableAnalyzers: map[string]struct{}{"slow": {}}},
+	)
+
+	if calls.Load() != 1 {
+		t.Fatalf("expected one attempt, got %d", calls.Load())
+	}
+	if len(toolErrors) != 1 {
+		t.Fatalf("expected one timeout tool error, got %#v", toolErrors)
+	}
+	if !strings.Contains(toolErrors[0].Message, "timed out") {
+		t.Fatalf("expected timeout message, got %#v", toolErrors[0])
+	}
+}
+
+func TestRunRetriesRetryableAnalyzerAfterTimeout(t *testing.T) {
+	var calls atomic.Int32
+	analyzer := stubAnalyzer{
+		name: "flaky",
+		runFn: func(ctx context.Context, target Target) Result {
+			attempt := calls.Add(1)
+			if attempt == 1 {
+				<-ctx.Done()
+				return Result{}
+			}
+			return Result{
+				Diagnostics: []model.Diagnostic{
+					{Path: "main.go", Rule: "custom/rule", Message: "ok"},
+				},
+			}
+		},
+	}
+
+	diagnosticsOut, toolErrors := Run(
+		context.Background(),
+		[]Analyzer{analyzer},
+		Target{},
+		1,
+		20*time.Millisecond,
+		RetryPolicy{Attempts: 2, RetryableAnalyzers: map[string]struct{}{"flaky": {}}},
+	)
+
+	if calls.Load() != 2 {
+		t.Fatalf("expected two attempts, got %d", calls.Load())
+	}
+	if len(toolErrors) != 0 {
+		t.Fatalf("expected retry success with no tool errors, got %#v", toolErrors)
+	}
+	if len(diagnosticsOut) != 1 {
+		t.Fatalf("expected one diagnostic from retry attempt, got %#v", diagnosticsOut)
 	}
 }

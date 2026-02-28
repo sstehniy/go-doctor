@@ -2,6 +2,7 @@ package diagnostics
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -44,7 +45,48 @@ type Result struct {
 	ToolErrors  []model.ToolError
 }
 
-func Run(ctx context.Context, analyzers []Analyzer, target Target, concurrency int, perAnalyzerTimeout time.Duration) ([]model.Diagnostic, []model.ToolError) {
+type RetryPolicy struct {
+	Attempts           int
+	RetryableAnalyzers map[string]struct{}
+}
+
+func DefaultRetryPolicy() RetryPolicy {
+	return RetryPolicy{
+		Attempts: 2,
+		RetryableAnalyzers: map[string]struct{}{
+			"repo-hygiene":  {},
+			"govet":         {},
+			"staticcheck":   {},
+			"govulncheck":   {},
+			"golangci-lint": {},
+			"custom":        {},
+		},
+	}
+}
+
+func (p RetryPolicy) attempts() int {
+	if p.Attempts < 1 {
+		return 1
+	}
+	return p.Attempts
+}
+
+func (p RetryPolicy) shouldRetry(name string) bool {
+	if len(p.RetryableAnalyzers) == 0 {
+		return false
+	}
+	_, ok := p.RetryableAnalyzers[name]
+	return ok
+}
+
+func Run(
+	ctx context.Context,
+	analyzers []Analyzer,
+	target Target,
+	concurrency int,
+	perAnalyzerTimeout time.Duration,
+	retryPolicy RetryPolicy,
+) ([]model.Diagnostic, []model.ToolError) {
 	if len(analyzers) == 0 {
 		return nil, nil
 	}
@@ -74,13 +116,7 @@ func Run(ctx context.Context, analyzers []Analyzer, target Target, concurrency i
 					return
 				default:
 				}
-				runCtx := ctx
-				cancel := func() {}
-				if perAnalyzerTimeout > 0 {
-					runCtx, cancel = context.WithTimeout(ctx, perAnalyzerTimeout)
-				}
-				result := analyzer.Run(runCtx, target)
-				cancel()
+				result := runAnalyzerWithPolicy(ctx, analyzer, target, perAnalyzerTimeout, retryPolicy)
 				results <- outcome{result: result}
 			}
 		}()
@@ -138,4 +174,85 @@ func Run(ctx context.Context, analyzers []Analyzer, target Target, concurrency i
 	})
 
 	return diagnosticsOut, toolErrors
+}
+
+func runAnalyzerWithPolicy(
+	ctx context.Context,
+	analyzer Analyzer,
+	target Target,
+	perAnalyzerTimeout time.Duration,
+	retryPolicy RetryPolicy,
+) Result {
+	attempts := retryPolicy.attempts()
+	retryable := retryPolicy.shouldRetry(analyzer.Name())
+
+	for attempt := 1; attempt <= attempts; attempt++ {
+		runCtx := ctx
+		cancel := func() {}
+		if perAnalyzerTimeout > 0 {
+			runCtx, cancel = context.WithTimeout(ctx, perAnalyzerTimeout)
+		}
+
+		resultCh := make(chan Result, 1)
+		go func() {
+			resultCh <- analyzer.Run(runCtx, target)
+		}()
+
+		select {
+		case result := <-resultCh:
+			cancel()
+			return result
+		case <-runCtx.Done():
+			err := runCtx.Err()
+			cancel()
+
+			if err == context.DeadlineExceeded && retryable && attempt < attempts {
+				if !waitForRetry(ctx, attempt) {
+					return analyzerInfraFailure(analyzer.Name(), ctx.Err().Error())
+				}
+				continue
+			}
+
+			if err == context.DeadlineExceeded {
+				return analyzerInfraFailure(analyzer.Name(), timeoutMessage(perAnalyzerTimeout, attempt, attempts))
+			}
+
+			return analyzerInfraFailure(analyzer.Name(), err.Error())
+		}
+	}
+
+	return analyzerInfraFailure(analyzer.Name(), "analyzer execution aborted")
+}
+
+func timeoutMessage(timeout time.Duration, attempt int, attempts int) string {
+	if timeout <= 0 {
+		return fmt.Sprintf("analyzer timed out (attempt %d/%d)", attempt, attempts)
+	}
+	return fmt.Sprintf("analyzer timed out after %s (attempt %d/%d)", timeout, attempt, attempts)
+}
+
+func waitForRetry(ctx context.Context, attempt int) bool {
+	delay := time.Duration(attempt) * 50 * time.Millisecond
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+func analyzerInfraFailure(name string, message string) Result {
+	return Result{
+		Metadata: AnalyzerMetadata{Name: name},
+		ToolErrors: []model.ToolError{
+			{
+				Tool:    name,
+				Message: message,
+				Fatal:   true,
+			},
+		},
+	}
 }
