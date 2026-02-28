@@ -66,8 +66,9 @@ go-doctor --format json .
 Shell completions:
 
 ```bash
-go-doctor completion bash
+go-doctor completion
 go-doctor completion zsh
+go-doctor completion script zsh > ~/.zsh/completions/_go-doctor
 ```
 
 SARIF output for GitHub code scanning:

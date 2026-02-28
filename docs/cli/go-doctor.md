@@ -20,6 +20,7 @@ go-doctor --diff .
 go-doctor --diff origin/main .
 go-doctor --list-rules
 go-doctor --baseline .go-doctor-baseline.json --fail-on warning .
+go-doctor completion
 go-doctor completion zsh
 ```
 
@@ -50,5 +51,5 @@ go-doctor completion zsh
 
 ### SEE ALSO
 
-* [go-doctor completion](go-doctor_completion.md)	 - Print shell completion scripts.
+* [go-doctor completion](go-doctor_completion.md)	 - Show shell completion install instructions.
 

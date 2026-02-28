@@ -1,13 +1,21 @@
 ## go-doctor completion
 
-Print shell completion scripts.
+Show shell completion install instructions.
 
 ### Synopsis
 
-Generate a shell completion script for the requested shell and write it to stdout.
+Show concise installation instructions for shell completions. Run without a shell to see every supported shell, or use 'go-doctor completion script <shell>' to print the raw script.
 
 ```
-go-doctor completion <bash|zsh|fish|powershell> [flags]
+go-doctor completion [bash|zsh|fish|powershell] [flags]
+```
+
+### Examples
+
+```
+go-doctor completion
+go-doctor completion zsh
+go-doctor completion script zsh > ~/.zsh/completions/_go-doctor
 ```
 
 ### Options
@@ -19,4 +27,5 @@ go-doctor completion <bash|zsh|fish|powershell> [flags]
 ### SEE ALSO
 
 * [go-doctor](go-doctor.md)	 - Check Go repositories for code health issues.
+* [go-doctor completion script](go-doctor_completion_script.md)	 - Print the raw shell completion script.
 
