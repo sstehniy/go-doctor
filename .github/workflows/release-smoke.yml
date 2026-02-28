@@ -75,7 +75,7 @@ jobs:
             tar -xzf release/go-doctor.tar.gz -C unpacked
           fi
 
-      - name: Smoke test completion scripts
+      - name: Smoke test completion guides and scripts
         shell: bash
         run: |
           set -euo pipefail
@@ -83,16 +83,24 @@ jobs:
           chmod +x "$bin" || true
           mkdir -p completions
 
-          "$bin" completion bash > completions/go-doctor.bash
+          "$bin" completion bash > completions/bash-guide.txt
+          grep -q "source <(go-doctor completion script bash)" completions/bash-guide.txt
+          "$bin" completion script bash > completions/go-doctor.bash
           grep -q "__start_go-doctor" completions/go-doctor.bash
 
-          "$bin" completion zsh > completions/go-doctor.zsh
+          "$bin" completion zsh > completions/zsh-guide.txt
+          grep -q "~/.zsh/completions/_go-doctor" completions/zsh-guide.txt
+          "$bin" completion script zsh > completions/go-doctor.zsh
           grep -q "#compdef go-doctor" completions/go-doctor.zsh
 
-          "$bin" completion fish > completions/go-doctor.fish
+          "$bin" completion fish > completions/fish-guide.txt
+          grep -q "~/.config/fish/completions/go-doctor.fish" completions/fish-guide.txt
+          "$bin" completion script fish > completions/go-doctor.fish
           grep -q "complete -c go-doctor" completions/go-doctor.fish
 
-          "$bin" completion powershell > completions/go-doctor.ps1
+          "$bin" completion powershell > completions/powershell-guide.txt
+          grep -q "Documents/PowerShell/Completions" completions/powershell-guide.txt
+          "$bin" completion script powershell > completions/go-doctor.ps1
           grep -q "Register-ArgumentCompleter" completions/go-doctor.ps1
 
       - name: Smoke test binary startup and scan path

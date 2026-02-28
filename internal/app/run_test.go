@@ -94,7 +94,7 @@ func TestRunHelp(t *testing.T) {
 		"Examples:",
 		"Common Flags",
 		"Commands:",
-		"completion <shell>",
+		"completion [shell]",
 	} {
 		if !strings.Contains(output, fragment) {
 			t.Fatalf("expected help output to contain %q, got %q", fragment, output)
@@ -144,16 +144,69 @@ func TestRunTooManyTargetsReturnsUsage(t *testing.T) {
 	}
 }
 
+func TestRunCompletionGuide(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"completion"}, &stdout, &stderr)
+	if code != ExitSuccess {
+		t.Fatalf("expected success, got %d: %s", code, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+
+	output := stdout.String()
+	for _, fragment := range []string{
+		"Shell completion install guide.",
+		"Bash",
+		"Zsh",
+		"Fish",
+		"PowerShell",
+		"go-doctor completion script zsh",
+	} {
+		if !strings.Contains(output, fragment) {
+			t.Fatalf("expected completion guide to contain %q, got %q", fragment, output)
+		}
+	}
+}
+
+func TestRunCompletionGuideForSingleShell(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"completion", "zsh"}, &stdout, &stderr)
+	if code != ExitSuccess {
+		t.Fatalf("expected success, got %d: %s", code, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Zsh") {
+		t.Fatalf("expected zsh guide, got %q", output)
+	}
+	if !strings.Contains(output, "~/.zsh/completions/_go-doctor") {
+		t.Fatalf("expected zsh install path, got %q", output)
+	}
+	for _, unwanted := range []string{"Bash\n", "Fish\n", "PowerShell\n"} {
+		if strings.Contains(output, unwanted) {
+			t.Fatalf("expected only zsh section, got %q", output)
+		}
+	}
+}
+
 func TestRunCompletionScripts(t *testing.T) {
 	testCases := []struct {
 		name     string
 		args     []string
 		fragment string
 	}{
-		{name: "bash", args: []string{"completion", "bash"}, fragment: "__start_go-doctor"},
-		{name: "zsh", args: []string{"completion", "zsh"}, fragment: "#compdef go-doctor"},
-		{name: "fish", args: []string{"completion", "fish"}, fragment: "complete -c go-doctor"},
-		{name: "powershell", args: []string{"completion", "powershell"}, fragment: "Register-ArgumentCompleter"},
+		{name: "bash", args: []string{"completion", "script", "bash"}, fragment: "__start_go-doctor"},
+		{name: "zsh", args: []string{"completion", "script", "zsh"}, fragment: "#compdef go-doctor"},
+		{name: "fish", args: []string{"completion", "script", "fish"}, fragment: "complete -c go-doctor"},
+		{name: "powershell", args: []string{"completion", "script", "powershell"}, fragment: "Register-ArgumentCompleter"},
 	}
 
 	for _, testCase := range testCases {
@@ -190,6 +243,27 @@ func TestRunCompletionRejectsInvalidShell(t *testing.T) {
 	errOutput := stderr.String()
 	if !strings.Contains(errOutput, `unsupported shell "tcsh"`) {
 		t.Fatalf("expected invalid shell error, got %q", errOutput)
+	}
+	if !strings.Contains(errOutput, usageHint) {
+		t.Fatalf("expected usage hint, got %q", errOutput)
+	}
+}
+
+func TestRunCompletionScriptRejectsMissingShell(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"completion", "script"}, &stdout, &stderr)
+	if code != ExitUsage {
+		t.Fatalf("expected usage exit, got %d", code)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected empty stdout, got %q", stdout.String())
+	}
+
+	errOutput := stderr.String()
+	if !strings.Contains(errOutput, "accepts 1 arg(s), received 0") {
+		t.Fatalf("expected missing arg error, got %q", errOutput)
 	}
 	if !strings.Contains(errOutput, usageHint) {
 		t.Fatalf("expected usage hint, got %q", errOutput)

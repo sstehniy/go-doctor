@@ -54,6 +54,8 @@ type flagGroup struct {
 	names []string
 }
 
+var completionShells = []string{"bash", "zsh", "fish", "powershell"}
+
 var rootFlagGroups = []flagGroup{
 	{title: "Common Flags", names: []string{"help", "config", "version", "list-rules"}},
 	{title: "Output Flags", names: []string{"format", "output", "verbose", "quiet", "no-score", "fail-on"}},
@@ -144,6 +146,7 @@ func rootExamples() string {
 		"go-doctor --diff origin/main .",
 		"go-doctor --list-rules",
 		"go-doctor --baseline .go-doctor-baseline.json --fail-on warning .",
+		"go-doctor completion",
 		"go-doctor completion zsh",
 	}
 	return strings.Join(lines, "\n")
@@ -168,27 +171,70 @@ func (state *commandState) runRoot(cmd *cobra.Command, _ []string) error {
 
 func (state *commandState) newCompletionCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:           "completion <bash|zsh|fish|powershell>",
-		Short:         "Print shell completion scripts.",
-		Long:          "Generate a shell completion script for the requested shell and write it to stdout.",
-		Args:          validateCompletionArgs,
+		Use:           "completion [bash|zsh|fish|powershell]",
+		Short:         "Show shell completion install instructions.",
+		Long:          "Show concise installation instructions for shell completions. Run without a shell to see every supported shell, or use 'go-doctor completion script <shell>' to print the raw script.",
+		Example:       "go-doctor completion\ngo-doctor completion zsh\ngo-doctor completion script zsh > ~/.zsh/completions/_go-doctor",
+		Args:          validateCompletionGuideArgs,
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		RunE:          state.runCompletion,
+		RunE:          state.runCompletionGuide,
 	}
-	cmd.ValidArgs = []string{"bash", "zsh", "fish", "powershell"}
+	cmd.ValidArgs = append([]string(nil), completionShells...)
+	cmd.AddCommand(state.newCompletionScriptCommand())
 	return cmd
 }
 
-func validateCompletionArgs(_ *cobra.Command, args []string) error {
+func validateCompletionGuideArgs(_ *cobra.Command, args []string) error {
+	if len(args) > 1 {
+		return newUsageErrorf("accepts at most 1 arg(s), received %d", len(args))
+	}
+	return nil
+}
+
+func (state *commandState) runCompletionGuide(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		_, _ = io.WriteString(state.stdout, renderCompletionGuide(cmd.Root().Name(), ""))
+		return nil
+	}
+
+	shell, err := normalizeCompletionShell(args[0])
+	if err != nil {
+		return err
+	}
+
+	_, _ = io.WriteString(state.stdout, renderCompletionGuide(cmd.Root().Name(), shell))
+	return nil
+}
+
+func (state *commandState) newCompletionScriptCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "script <bash|zsh|fish|powershell>",
+		Short:         "Print the raw shell completion script.",
+		Long:          "Print the raw shell completion script for a specific shell. This is intended for redirection into a completion file or sourcing in your shell startup flow.",
+		Example:       "go-doctor completion script bash\ngo-doctor completion script zsh > ~/.zsh/completions/_go-doctor",
+		Args:          validateCompletionScriptArgs,
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE:          state.runCompletionScript,
+	}
+	cmd.ValidArgs = append([]string(nil), completionShells...)
+	return cmd
+}
+
+func validateCompletionScriptArgs(_ *cobra.Command, args []string) error {
 	if len(args) != 1 {
 		return newUsageErrorf("accepts 1 arg(s), received %d", len(args))
 	}
 	return nil
 }
 
-func (state *commandState) runCompletion(cmd *cobra.Command, args []string) error {
-	shell := strings.ToLower(strings.TrimSpace(args[0]))
+func (state *commandState) runCompletionScript(cmd *cobra.Command, args []string) error {
+	shell, err := normalizeCompletionShell(args[0])
+	if err != nil {
+		return err
+	}
+
 	switch shell {
 	case "bash":
 		return cmd.Root().GenBashCompletionV2(state.stdout, true)
@@ -200,6 +246,90 @@ func (state *commandState) runCompletion(cmd *cobra.Command, args []string) erro
 		return cmd.Root().GenPowerShellCompletionWithDesc(state.stdout)
 	default:
 		return newUsageErrorf("unsupported shell %q", args[0])
+	}
+}
+
+func normalizeCompletionShell(value string) (string, error) {
+	shell := strings.ToLower(strings.TrimSpace(value))
+	switch shell {
+	case "bash", "zsh", "fish", "powershell":
+		return shell, nil
+	default:
+		return "", newUsageErrorf("unsupported shell %q", value)
+	}
+}
+
+func renderCompletionGuide(rootName string, shell string) string {
+	if shell == "" {
+		var builder strings.Builder
+		builder.WriteString("Shell completion install guide.\n\n")
+		builder.WriteString("Run `")
+		builder.WriteString(rootName)
+		builder.WriteString(" completion <shell>` for one shell only.\n")
+		builder.WriteString("Run `")
+		builder.WriteString(rootName)
+		builder.WriteString(" completion script <shell>` to print the raw script.\n\n")
+		for index, current := range completionShells {
+			if index > 0 {
+				builder.WriteString("\n\n")
+			}
+			builder.WriteString(renderCompletionShellGuide(rootName, current))
+		}
+		builder.WriteByte('\n')
+		return builder.String()
+	}
+	return renderCompletionShellGuide(rootName, shell) + "\n"
+}
+
+func renderCompletionShellGuide(rootName string, shell string) string {
+	scriptCommand := rootName + " completion script " + shell
+
+	switch shell {
+	case "bash":
+		return strings.Join([]string{
+			"Bash",
+			"  Current shell:",
+			"    source <(" + scriptCommand + ")",
+			"  Persistent (Linux):",
+			"    mkdir -p ~/.local/share/bash-completion/completions",
+			"    " + scriptCommand + " > ~/.local/share/bash-completion/completions/go-doctor",
+			"  Persistent (macOS/Homebrew bash-completion):",
+			"    mkdir -p \"$(brew --prefix)/etc/bash_completion.d\"",
+			"    " + scriptCommand + " > \"$(brew --prefix)/etc/bash_completion.d/go-doctor\"",
+		}, "\n")
+	case "zsh":
+		return strings.Join([]string{
+			"Zsh",
+			"  Install:",
+			"    mkdir -p ~/.zsh/completions",
+			"    " + scriptCommand + " > ~/.zsh/completions/_go-doctor",
+			"  Ensure ~/.zshrc loads that directory:",
+			"    fpath=(~/.zsh/completions $fpath)",
+			"    autoload -Uz compinit",
+			"    compinit",
+		}, "\n")
+	case "fish":
+		return strings.Join([]string{
+			"Fish",
+			"  Install:",
+			"    mkdir -p ~/.config/fish/completions",
+			"    " + scriptCommand + " > ~/.config/fish/completions/go-doctor.fish",
+		}, "\n")
+	case "powershell":
+		return strings.Join([]string{
+			"PowerShell",
+			"  Current session:",
+			"    " + scriptCommand + " | Out-String | Invoke-Expression",
+			"  Persistent:",
+			"    $dir = Join-Path $HOME \"Documents/PowerShell/Completions\"",
+			"    New-Item -ItemType Directory -Force -Path $dir | Out-Null",
+			"    $script = Join-Path $dir \"go-doctor.ps1\"",
+			"    " + scriptCommand + " > $script",
+			"    if (!(Test-Path $PROFILE)) { New-Item -ItemType File -Force -Path $PROFILE | Out-Null }",
+			"    Add-Content $PROFILE \"`n. '$script'\"",
+		}, "\n")
+	default:
+		return ""
 	}
 }
 
@@ -227,7 +357,7 @@ func renderRootHelp(cmd *cobra.Command, _ []string) {
 	}
 
 	builder.WriteString("Commands:\n")
-	builder.WriteString("  completion <shell>         Print a shell completion script.\n")
+	builder.WriteString("  completion [shell]         Show completion install help.\n")
 	builder.WriteString("  help [command]             Show help for a command.\n")
 
 	_, _ = io.WriteString(cmd.OutOrStdout(), builder.String())
@@ -247,6 +377,16 @@ func renderSubcommandHelp(cmd *cobra.Command) {
 	builder.WriteString(cmd.UseLine())
 	builder.WriteString("\n\n")
 
+	if cmd.Example != "" {
+		builder.WriteString("Examples:\n")
+		for _, line := range strings.Split(cmd.Example, "\n") {
+			builder.WriteString("  ")
+			builder.WriteString(line)
+			builder.WriteByte('\n')
+		}
+		builder.WriteByte('\n')
+	}
+
 	if len(cmd.ValidArgs) > 0 {
 		builder.WriteString("Valid Arguments:\n")
 		builder.WriteString("  ")
@@ -258,10 +398,32 @@ func renderSubcommandHelp(cmd *cobra.Command) {
 	if flags != "" {
 		builder.WriteString("Flags:\n")
 		builder.WriteString(flags)
+		builder.WriteString("\n\n")
+	}
+
+	commands := availableSubcommands(cmd)
+	if len(commands) > 0 {
+		builder.WriteString("Commands:\n")
+		for _, subcommand := range commands {
+			builder.WriteString("  ")
+			builder.WriteString(fmt.Sprintf("%-28s %s", subcommand.UseLine(), subcommand.Short))
+			builder.WriteByte('\n')
+		}
 		builder.WriteString("\n")
 	}
 
 	_, _ = io.WriteString(cmd.OutOrStdout(), builder.String())
+}
+
+func availableSubcommands(cmd *cobra.Command) []*cobra.Command {
+	commands := make([]*cobra.Command, 0, len(cmd.Commands()))
+	for _, subcommand := range cmd.Commands() {
+		if !subcommand.IsAvailableCommand() || subcommand.IsAdditionalHelpTopicCommand() {
+			continue
+		}
+		commands = append(commands, subcommand)
+	}
+	return commands
 }
 
 func renderFlagGroup(builder *strings.Builder, cmd *cobra.Command, group flagGroup) {

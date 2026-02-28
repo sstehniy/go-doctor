@@ -51,8 +51,9 @@ go-doctor --format sarif --output results.sarif .
 ## Shell completion
 
 ```bash
-go-doctor completion bash
+go-doctor completion
 go-doctor completion zsh
+go-doctor completion script zsh > ~/.zsh/completions/_go-doctor
 ```
 
 ## Diff mode
