@@ -15,6 +15,7 @@ import (
 	"github.com/stanislavstehniy/go-doctor/internal/analyzers/thirdparty"
 	"github.com/stanislavstehniy/go-doctor/internal/baseline"
 	"github.com/stanislavstehniy/go-doctor/internal/diagnostics"
+	"github.com/stanislavstehniy/go-doctor/internal/diff"
 	"github.com/stanislavstehniy/go-doctor/internal/discovery"
 	"github.com/stanislavstehniy/go-doctor/internal/model"
 	"github.com/stanislavstehniy/go-doctor/internal/scoring"
@@ -30,6 +31,7 @@ type Options struct {
 	Score            bool
 	FailOn           string
 	DiffBase         string
+	DiffGovulncheck  string
 	Packages         []string
 	Modules          []string
 	Timeout          time.Duration
@@ -81,6 +83,11 @@ type DiagnoseResult struct {
 	ElapsedMillis int64        `json:"elapsedMillis"`
 }
 
+const (
+	DiffGovulncheckSkip               = "skip"
+	DiffGovulncheckChangedModulesOnly = "changed-modules-only"
+)
+
 func Diagnose(ctx context.Context, target string, opts Options) (DiagnoseResult, error) {
 	start := time.Now()
 	if opts.Timeout > 0 {
@@ -100,7 +107,7 @@ func Diagnose(ctx context.Context, target string, opts Options) (DiagnoseResult,
 		return DiagnoseResult{}, err
 	}
 
-	score := scoring.Score(0, opts.Score)
+	score := scoring.Score(nil, opts.Score)
 	result := DiagnoseResult{
 		SchemaVersion: 1,
 		Project: ProjectInfo{
@@ -134,19 +141,86 @@ func Diagnose(ctx context.Context, target string, opts Options) (DiagnoseResult,
 			Allow:   append([]string(nil), layer.Allow...),
 		})
 	}
-	analyzers := make([]diagnostics.Analyzer, 0, 4)
+
+	diffEnabled := strings.TrimSpace(opts.DiffBase) != ""
+	diffPlan := diff.Plan{}
+	if diffEnabled {
+		base := opts.DiffBase
+		if strings.TrimSpace(base) == "" {
+			base = diff.AutoBase
+		}
+		diffPlan, err = diff.Discover(ctx, diff.Options{
+			RepoRoot:    info.Root,
+			ModuleRoots: info.ModuleRoots,
+			Base:        base,
+		})
+		if err != nil {
+			return DiagnoseResult{}, err
+		}
+		for _, warning := range diffPlan.Warnings {
+			result.ToolErrors = append(result.ToolErrors, model.ToolError{
+				Tool:    "diff",
+				Message: warning,
+			})
+		}
+		if diffPlan.Narrowed {
+			targetSpec.PackagePatterns = append([]string(nil), diffPlan.PackagePatterns...)
+			targetSpec.IncludeFiles = append([]string(nil), diffPlan.IncludeFiles...)
+		}
+	}
+
+	analyzers := make([]diagnostics.Analyzer, 0, 8)
 	if opts.RepoHygiene {
-		analyzers = append(analyzers, repohygiene.DefaultAnalyzers(targetSpec, opts.EnableRules, opts.DisableRules)...)
+		for _, analyzer := range repohygiene.DefaultAnalyzers(targetSpec, opts.EnableRules, opts.DisableRules) {
+			analyzers = append(analyzers, targetBoundAnalyzer{analyzer: analyzer, target: cloneTarget(targetSpec)})
+		}
 	} else {
 		result.SkippedTools = append(result.SkippedTools, "repo-hygiene")
 	}
 	if opts.ThirdParty {
-		analyzers = append(analyzers, thirdparty.DefaultAnalyzers(targetSpec, opts.EnableRules, opts.DisableRules)...)
+		for _, analyzer := range thirdparty.DefaultAnalyzers(targetSpec, opts.EnableRules, opts.DisableRules) {
+			name := analyzer.Name()
+			if diffEnabled && diffPlan.Narrowed {
+				if isPackageScopedThirdParty(name) && len(diffPlan.PackagePatterns) == 0 {
+					result.SkippedTools = append(result.SkippedTools, fmt.Sprintf("%s (diff: no changed packages)", name))
+					continue
+				}
+				if name == "govulncheck" {
+					if diffGovulncheckMode(opts.DiffGovulncheck) == DiffGovulncheckChangedModulesOnly {
+						if len(diffPlan.ModulePatterns) == 0 {
+							result.SkippedTools = append(result.SkippedTools, "govulncheck (diff: no changed modules)")
+							continue
+						}
+						govulnTarget := cloneTarget(targetSpec)
+						govulnTarget.ModulePatterns = append([]string(nil), diffPlan.ModulePatterns...)
+						analyzers = append(analyzers, targetBoundAnalyzer{analyzer: analyzer, target: govulnTarget})
+						continue
+					}
+					result.SkippedTools = append(result.SkippedTools, "govulncheck (diff default)")
+					continue
+				}
+				if !analyzer.SupportsDiff() {
+					result.SkippedTools = append(result.SkippedTools, fmt.Sprintf("%s (no diff support)", name))
+					continue
+				}
+			}
+			analyzers = append(analyzers, targetBoundAnalyzer{analyzer: analyzer, target: cloneTarget(targetSpec)})
+		}
 	} else {
 		result.SkippedTools = append(result.SkippedTools, "third-party")
 	}
 	if opts.Custom {
-		analyzers = append(analyzers, custom.DefaultAnalyzers(targetSpec, opts.EnableRules, opts.DisableRules)...)
+		for _, analyzer := range custom.DefaultAnalyzers(targetSpec, opts.EnableRules, opts.DisableRules) {
+			if diffEnabled && diffPlan.Narrowed && len(diffPlan.PackagePatterns) == 0 {
+				result.SkippedTools = append(result.SkippedTools, "custom (diff: no changed packages)")
+				continue
+			}
+			if diffEnabled && diffPlan.Narrowed && !analyzer.SupportsDiff() {
+				result.SkippedTools = append(result.SkippedTools, fmt.Sprintf("%s (no diff support)", analyzer.Name()))
+				continue
+			}
+			analyzers = append(analyzers, targetBoundAnalyzer{analyzer: analyzer, target: cloneTarget(targetSpec)})
+		}
 	} else {
 		result.SkippedTools = append(result.SkippedTools, "custom")
 	}
@@ -154,7 +228,7 @@ func Diagnose(ctx context.Context, target string, opts Options) (DiagnoseResult,
 	perAnalyzerTimeout := defaultPerAnalyzerTimeout(opts.Timeout)
 	diagnosticsOut, toolErrors := diagnostics.Run(ctx, analyzers, targetSpec, opts.Concurrency, perAnalyzerTimeout)
 	result.Diagnostics = diagnosticsOut
-	result.ToolErrors = toolErrors
+	result.ToolErrors = append(result.ToolErrors, toolErrors...)
 	if len(analyzers) > 0 && len(diagnosticsOut) == 0 && len(toolErrors) >= len(analyzers) {
 		result.ElapsedMillis = time.Since(start).Milliseconds()
 		return result, fmt.Errorf("all analyzers failed")
@@ -169,7 +243,7 @@ func Diagnose(ctx context.Context, target string, opts Options) (DiagnoseResult,
 		result.ElapsedMillis = time.Since(start).Milliseconds()
 		return result, err
 	}
-	score = scoring.Score(activeDiagnosticCount(result.Diagnostics), opts.Score)
+	score = scoring.Score(result.Diagnostics, opts.Score)
 	result.ElapsedMillis = time.Since(start).Milliseconds()
 
 	if score.Enabled {
@@ -229,6 +303,66 @@ func defaultPerAnalyzerTimeout(total time.Duration) time.Duration {
 	return total
 }
 
+type targetBoundAnalyzer struct {
+	analyzer diagnostics.Analyzer
+	target   diagnostics.Target
+}
+
+func (t targetBoundAnalyzer) Name() string {
+	return t.analyzer.Name()
+}
+
+func (t targetBoundAnalyzer) SupportsDiff() bool {
+	return t.analyzer.SupportsDiff()
+}
+
+func (t targetBoundAnalyzer) Run(ctx context.Context, _ diagnostics.Target) diagnostics.Result {
+	return t.analyzer.Run(ctx, t.target)
+}
+
+func cloneTarget(target diagnostics.Target) diagnostics.Target {
+	cloned := diagnostics.Target{
+		RepoRoot:         target.RepoRoot,
+		Mode:             target.Mode,
+		GoVersion:        target.GoVersion,
+		ModuleRoots:      append([]string(nil), target.ModuleRoots...),
+		PackagePatterns:  append([]string(nil), target.PackagePatterns...),
+		ModulePatterns:   append([]string(nil), target.ModulePatterns...),
+		IncludeFiles:     append([]string(nil), target.IncludeFiles...),
+		IncludeGenerated: target.IncludeGenerated,
+		Architecture:     make([]diagnostics.Layer, 0, len(target.Architecture)),
+	}
+	for _, layer := range target.Architecture {
+		cloned.Architecture = append(cloned.Architecture, diagnostics.Layer{
+			Name:    layer.Name,
+			Include: append([]string(nil), layer.Include...),
+			Allow:   append([]string(nil), layer.Allow...),
+		})
+	}
+	return cloned
+}
+
+func isPackageScopedThirdParty(name string) bool {
+	switch name {
+	case "govet", "staticcheck", "golangci-lint":
+		return true
+	default:
+		return false
+	}
+}
+
+func diffGovulncheckMode(value string) string {
+	mode := strings.ToLower(strings.TrimSpace(value))
+	switch mode {
+	case "", DiffGovulncheckSkip:
+		return DiffGovulncheckSkip
+	case DiffGovulncheckChangedModulesOnly:
+		return DiffGovulncheckChangedModulesOnly
+	default:
+		return DiffGovulncheckSkip
+	}
+}
+
 func uniqueSorted(values []string) []string {
 	set := make(map[string]struct{}, len(values))
 	for _, value := range values {
@@ -275,17 +409,6 @@ func applyBaseline(result *DiagnoseResult, opts Options) error {
 	}
 	result.Diagnostics = baseline.Apply(result.Diagnostics, set)
 	return nil
-}
-
-func activeDiagnosticCount(diagnostics []model.Diagnostic) int {
-	count := 0
-	for _, diagnostic := range diagnostics {
-		if diagnostic.Suppressed {
-			continue
-		}
-		count++
-	}
-	return count
 }
 
 func ciEnabled() bool {

@@ -17,7 +17,7 @@ func (analyzer) Name() string {
 }
 
 func (analyzer) SupportsDiff() bool {
-	return false
+	return true
 }
 
 func (a analyzer) Run(ctx context.Context, target diagnostics.Target) diagnostics.Result {
@@ -75,7 +75,7 @@ func (failingAnalyzer) Name() string {
 }
 
 func (failingAnalyzer) SupportsDiff() bool {
-	return false
+	return true
 }
 
 func (f failingAnalyzer) Run(context.Context, diagnostics.Target) diagnostics.Result {

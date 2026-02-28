@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -176,6 +177,186 @@ func TestDiagnoseBaselineSkipsInlineSuppressedFindings(t *testing.T) {
 	}
 }
 
+func TestDiagnoseDiffNarrowsCustomAnalysisToChangedPackages(t *testing.T) {
+	repo := initDiffRepo(t)
+	writeRepoFile(t, repo, "pkg/a/a.go", "package a\nfunc Check(err error) bool { return err.Error() == \"boom\" }\n")
+	writeRepoFile(t, repo, "pkg/b/b.go", "package b\nfunc Check(err error) bool { return err.Error() == \"boom\" }\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+
+	git(t, repo, "checkout", "-b", "feature")
+	writeRepoFile(t, repo, "pkg/a/a.go", "package a\nfunc Check(err error) bool {\n\treturn err.Error() == \"boom\"\n}\n")
+	git(t, repo, "add", "-A")
+	git(t, repo, "commit", "-m", "touch pkg a")
+
+	result, err := Diagnose(context.Background(), repo, Options{
+		Timeout:      30 * time.Second,
+		Concurrency:  1,
+		DiffBase:     "main",
+		EnableRules:  []string{"error/string-compare"},
+		RepoHygiene:  false,
+		ThirdParty:   false,
+		Custom:       true,
+		Score:        true,
+		BaselinePath: "",
+	})
+	if err != nil {
+		t.Fatalf("diagnose: %v", err)
+	}
+	if len(result.Diagnostics) != 1 {
+		t.Fatalf("expected one narrowed diagnostic, got %#v", result.Diagnostics)
+	}
+	if result.Diagnostics[0].Path != "pkg/a/a.go" {
+		t.Fatalf("expected pkg/a finding, got %#v", result.Diagnostics[0])
+	}
+}
+
+func TestDiagnoseDiffStillRunsRepoLevelChecks(t *testing.T) {
+	repo := initDiffRepo(t)
+	writeRepoFile(t, repo, "go.mod", "module example.com/test\n\ngo 1.22.0\n\nreplace example.com/local => ../local\n")
+	writeRepoFile(t, repo, "pkg/a/a.go", "package a\nfunc A(){}\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+
+	git(t, repo, "checkout", "-b", "feature")
+	writeRepoFile(t, repo, "pkg/a/a.go", "package a\nfunc A(){println(\"changed\")}\n")
+	git(t, repo, "add", "-A")
+	git(t, repo, "commit", "-m", "touch pkg")
+
+	result, err := Diagnose(context.Background(), repo, Options{
+		Timeout:      30 * time.Second,
+		Concurrency:  1,
+		DiffBase:     "main",
+		EnableRules:  []string{"mod/replace-local-path"},
+		RepoHygiene:  true,
+		ThirdParty:   false,
+		Custom:       false,
+		Score:        false,
+		BaselinePath: "",
+	})
+	if err != nil {
+		t.Fatalf("diagnose: %v", err)
+	}
+	if len(result.Diagnostics) != 1 {
+		t.Fatalf("expected repo diagnostic, got %#v", result.Diagnostics)
+	}
+	if result.Diagnostics[0].Rule != "mod/replace-local-path" {
+		t.Fatalf("expected mod/replace-local-path finding, got %#v", result.Diagnostics[0])
+	}
+}
+
+func TestDiagnoseDiffSkipsGovulncheckByDefault(t *testing.T) {
+	repo := initDiffRepo(t)
+	writeRepoFile(t, repo, "main.go", "package main\nfunc main(){}\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+
+	git(t, repo, "checkout", "-b", "feature")
+	writeRepoFile(t, repo, "main.go", "package main\nfunc main(){println(\"changed\")}\n")
+	git(t, repo, "add", "-A")
+	git(t, repo, "commit", "-m", "change")
+
+	result, err := Diagnose(context.Background(), repo, Options{
+		Timeout:      30 * time.Second,
+		Concurrency:  1,
+		DiffBase:     "main",
+		EnableRules:  []string{"govulncheck", "mod/not-tidy"},
+		RepoHygiene:  true,
+		ThirdParty:   true,
+		Custom:       false,
+		Score:        false,
+		BaselinePath: "",
+	})
+	if err != nil {
+		t.Fatalf("diagnose: %v", err)
+	}
+	foundSkip := false
+	for _, skipped := range result.SkippedTools {
+		if strings.Contains(skipped, "govulncheck") {
+			foundSkip = true
+			break
+		}
+	}
+	if !foundSkip {
+		t.Fatalf("expected govulncheck skip in diff mode, got %#v", result.SkippedTools)
+	}
+}
+
+func TestDiagnoseDiffGovulncheckChangedModulesOnlyMode(t *testing.T) {
+	repo := initDiffRepo(t)
+	writeRepoFile(t, repo, "main.go", "package main\nfunc main(){}\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+
+	git(t, repo, "checkout", "-b", "feature")
+	writeRepoFile(t, repo, "main.go", "package main\nfunc main(){println(\"changed\")}\n")
+	git(t, repo, "add", "-A")
+	git(t, repo, "commit", "-m", "change")
+
+	result, err := Diagnose(context.Background(), repo, Options{
+		Timeout:          30 * time.Second,
+		Concurrency:      1,
+		DiffBase:         "main",
+		DiffGovulncheck:  DiffGovulncheckChangedModulesOnly,
+		EnableRules:      []string{"govulncheck", "mod/not-tidy"},
+		RepoHygiene:      true,
+		ThirdParty:       true,
+		Custom:           false,
+		Score:            false,
+		BaselinePath:     "",
+		IncludeGenerated: false,
+	})
+	if err != nil {
+		t.Fatalf("diagnose: %v", err)
+	}
+	foundToolError := false
+	for _, toolErr := range result.ToolErrors {
+		if toolErr.Tool == "govulncheck" {
+			foundToolError = true
+			break
+		}
+	}
+	if !foundToolError {
+		t.Fatalf("expected govulncheck to execute in changed-modules-only mode, got tool errors %#v", result.ToolErrors)
+	}
+}
+
+func TestDiagnoseDiffDeletedFilesStillRecalculatePackageScope(t *testing.T) {
+	repo := initDiffRepo(t)
+	writeRepoFile(t, repo, "pkg/a/live.go", "package a\nfunc Check(err error) bool { return err.Error() == \"boom\" }\n")
+	writeRepoFile(t, repo, "pkg/a/delete_me.go", "package a\nfunc DeleteMe(){}\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+
+	git(t, repo, "checkout", "-b", "feature")
+	if err := os.Remove(filepath.Join(repo, "pkg/a/delete_me.go")); err != nil {
+		t.Fatalf("remove file: %v", err)
+	}
+	git(t, repo, "add", "-A")
+	git(t, repo, "commit", "-m", "delete file")
+
+	result, err := Diagnose(context.Background(), repo, Options{
+		Timeout:      30 * time.Second,
+		Concurrency:  1,
+		DiffBase:     "main",
+		EnableRules:  []string{"error/string-compare"},
+		RepoHygiene:  false,
+		ThirdParty:   false,
+		Custom:       true,
+		Score:        false,
+		BaselinePath: "",
+	})
+	if err != nil {
+		t.Fatalf("diagnose: %v", err)
+	}
+	if len(result.Diagnostics) != 1 {
+		t.Fatalf("expected package to be re-analyzed after delete, got %#v", result.Diagnostics)
+	}
+	if result.Diagnostics[0].Path != "pkg/a/live.go" {
+		t.Fatalf("expected finding from live file, got %#v", result.Diagnostics[0])
+	}
+}
+
 func writeRepoFixture(t *testing.T, mainGo string) string {
 	t.Helper()
 
@@ -206,4 +387,36 @@ func toolPathWithGofmtOnly(t *testing.T) string {
 		t.Fatalf("symlink gofmt: %v", err)
 	}
 	return dir
+}
+
+func initDiffRepo(t *testing.T) string {
+	t.Helper()
+	repo := t.TempDir()
+	writeRepoFile(t, repo, "go.mod", "module example.com/test\n\ngo 1.22.0\n")
+	git(t, repo, "init", "-b", "main")
+	git(t, repo, "config", "user.email", "test@example.com")
+	git(t, repo, "config", "user.name", "Test User")
+	return repo
+}
+
+func writeRepoFile(t *testing.T, repo string, rel string, content string) {
+	t.Helper()
+	path := filepath.Join(repo, rel)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func git(t *testing.T, repo string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repo
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s failed: %v (%s)", strings.Join(args, " "), err, string(output))
+	}
+	return strings.TrimSpace(string(output))
 }

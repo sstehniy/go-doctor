@@ -33,6 +33,7 @@ type File struct {
 
 type ScanConfig struct {
 	Diff             string   `json:"diff" yaml:"diff"`
+	DiffGovulncheck  string   `json:"diffGovulncheck" yaml:"diffGovulncheck"`
 	Packages         []string `json:"packages" yaml:"packages"`
 	Modules          []string `json:"modules" yaml:"modules"`
 	Timeout          string   `json:"timeout" yaml:"timeout"`
@@ -131,6 +132,9 @@ func Load(targetDir, explicitPath string, knownRules []string) (File, string, er
 func (f File) Apply(opts *godoctor.Options) error {
 	if f.Scan.Diff != "" {
 		opts.DiffBase = f.Scan.Diff
+	}
+	if f.Scan.DiffGovulncheck != "" {
+		opts.DiffGovulncheck = f.Scan.DiffGovulncheck
 	}
 	if len(f.Scan.Packages) > 0 {
 		opts.Packages = slices.Clone(f.Scan.Packages)
@@ -305,6 +309,15 @@ func ValidateFormat(value string) error {
 		return nil
 	default:
 		return fmt.Errorf("unsupported --format value %q", value)
+	}
+}
+
+func ValidateDiffGovulncheck(value string) error {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "skip", "changed-modules-only":
+		return nil
+	default:
+		return fmt.Errorf("unsupported diff govulncheck mode %q", value)
 	}
 }
 

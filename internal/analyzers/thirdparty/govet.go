@@ -23,7 +23,7 @@ func (goVetAdapter) Name() string {
 }
 
 func (goVetAdapter) SupportsDiff() bool {
-	return false
+	return true
 }
 
 func (goVetAdapter) Run(ctx context.Context, target diagnostics.Target) diagnostics.Result {

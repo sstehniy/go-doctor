@@ -1,3 +1,3 @@
 package diff
 
-// Package diff reserves diff narrowing support for later milestones.
+// Package diff computes changed files and narrowed package/module scopes.

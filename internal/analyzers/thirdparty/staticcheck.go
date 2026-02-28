@@ -23,7 +23,7 @@ func (staticcheckAdapter) Name() string {
 }
 
 func (staticcheckAdapter) SupportsDiff() bool {
-	return false
+	return true
 }
 
 func (staticcheckAdapter) Run(ctx context.Context, target diagnostics.Target) diagnostics.Result {

@@ -34,7 +34,7 @@ func TestRunTextOutputSingleModule(t *testing.T) {
 	if !strings.Contains(output, "mode: module") {
 		t.Fatalf("expected module mode, got %q", output)
 	}
-	if !strings.Contains(output, "100/100 (A)") {
+	if !strings.Contains(output, "100/100 (Excellent)") {
 		t.Fatalf("expected score, got %q", output)
 	}
 }
@@ -327,4 +327,57 @@ func writeRepoHygieneFixture(t *testing.T) string {
 		t.Fatalf("write main.go: %v", err)
 	}
 	return root
+}
+
+func TestNormalizeArgs(t *testing.T) {
+	testCases := []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{
+			name: "bare diff uses auto mode",
+			in:   []string{"--diff"},
+			want: []string{"--diff=auto"},
+		},
+		{
+			name: "bare diff keeps trailing target positional",
+			in:   []string{"--diff", "."},
+			want: []string{"--diff=auto", "."},
+		},
+		{
+			name: "explicit base remains explicit",
+			in:   []string{"--diff", "origin/main", "."},
+			want: []string{"--diff", "origin/main", "."},
+		},
+		{
+			name: "explicit base without target remains explicit",
+			in:   []string{"--diff", "origin/main"},
+			want: []string{"--diff", "origin/main"},
+		},
+		{
+			name: "explicit base main remains explicit",
+			in:   []string{"--diff", "main"},
+			want: []string{"--diff", "main"},
+		},
+		{
+			name: "bare diff before another flag uses auto mode",
+			in:   []string{"--diff", "--format=json"},
+			want: []string{"--diff=auto", "--format=json"},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := normalizeArgs(testCase.in)
+			if len(got) != len(testCase.want) {
+				t.Fatalf("normalizeArgs(%#v) len = %d, want %d (%#v)", testCase.in, len(got), len(testCase.want), got)
+			}
+			for index := range got {
+				if got[index] != testCase.want[index] {
+					t.Fatalf("normalizeArgs(%#v)[%d] = %q, want %q (%#v)", testCase.in, index, got[index], testCase.want[index], got)
+				}
+			}
+		})
+	}
 }

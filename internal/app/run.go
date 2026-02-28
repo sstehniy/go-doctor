@@ -72,6 +72,10 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 		fmt.Fprintln(stderr, err)
 		return ExitUsage
 	}
+	if err := cfgpkg.ValidateDiffGovulncheck(opts.DiffGovulncheck); err != nil {
+		fmt.Fprintln(stderr, err)
+		return ExitUsage
+	}
 	if err := cfgpkg.ValidateRuleSelections(opts.EnableRules, opts.DisableRules, selectors); err != nil {
 		fmt.Fprintln(stderr, err)
 		return ExitUsage
@@ -136,6 +140,7 @@ type cliInput struct {
 	noScore     bool
 	failOn      string
 	diff        string
+	diffGovuln  string
 	packages    csvList
 	modules     csvList
 	timeout     durationFlag
@@ -164,6 +169,7 @@ func parseArgs(args []string) (cliInput, error) {
 	fs.BoolVar(&cli.noScore, "no-score", false, "")
 	fs.StringVar(&cli.failOn, "fail-on", "", "")
 	fs.StringVar(&cli.diff, "diff", "", "")
+	fs.StringVar(&cli.diffGovuln, "diff-govulncheck", "", "")
 	fs.Var(&cli.packages, "packages", "")
 	fs.Var(&cli.modules, "modules", "")
 	fs.Var(&cli.timeout, "timeout", "")
@@ -176,7 +182,7 @@ func parseArgs(args []string) (cliInput, error) {
 	fs.BoolVar(&cli.version, "version", false, "")
 	fs.BoolVar(&cli.quiet, "quiet", false, "")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(normalizeArgs(args)); err != nil {
 		return cli, err
 	}
 	fs.Visit(func(f *flag.Flag) {
@@ -216,6 +222,9 @@ func applyCLIOverrides(opts *godoctor.Options, cli cliInput) {
 	if cli.explicit["diff"] {
 		opts.DiffBase = cli.diff
 	}
+	if cli.explicit["diff-govulncheck"] {
+		opts.DiffGovulncheck = cli.diffGovuln
+	}
 	if cli.explicit["packages"] {
 		opts.Packages = append([]string(nil), cli.packages...)
 	}
@@ -243,6 +252,40 @@ func applyCLIOverrides(opts *godoctor.Options, cli cliInput) {
 	if cli.explicit["quiet"] {
 		opts.Quiet = cli.quiet
 	}
+}
+
+func normalizeArgs(args []string) []string {
+	if len(args) == 0 {
+		return nil
+	}
+
+	normalized := make([]string, 0, len(args))
+	for index := 0; index < len(args); index++ {
+		current := args[index]
+		if current != "--diff" {
+			normalized = append(normalized, current)
+			continue
+		}
+
+		nextIndex := index + 1
+		if nextIndex >= len(args) {
+			normalized = append(normalized, "--diff=auto")
+			continue
+		}
+		next := args[nextIndex]
+		if strings.HasPrefix(next, "-") {
+			normalized = append(normalized, "--diff=auto")
+			continue
+		}
+		// Keep `--diff .` ergonomic for the common "auto mode + current directory" usage.
+		if nextIndex == len(args)-1 && next == "." {
+			normalized = append(normalized, "--diff=auto")
+			continue
+		}
+
+		normalized = append(normalized, current)
+	}
+	return normalized
 }
 
 func renderOutput(result godoctor.DiagnoseResult, opts godoctor.Options) ([]byte, error) {

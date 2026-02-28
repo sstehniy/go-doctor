@@ -25,7 +25,7 @@ func (g golangciAdapter) Name() string {
 }
 
 func (golangciAdapter) SupportsDiff() bool {
-	return false
+	return true
 }
 
 func (g golangciAdapter) Run(ctx context.Context, target diagnostics.Target) diagnostics.Result {

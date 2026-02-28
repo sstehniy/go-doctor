@@ -252,7 +252,6 @@ func (c *analysisContext) loadTypedPackages(ctx context.Context) []model.ToolErr
 		Context: ctx,
 		Mode: packages.NeedName |
 			packages.NeedFiles |
-			packages.NeedCompiledGoFiles |
 			packages.NeedSyntax |
 			packages.NeedTypes |
 			packages.NeedTypesInfo |
@@ -280,7 +279,14 @@ func (c *analysisContext) loadTypedPackages(ctx context.Context) []model.ToolErr
 		}
 
 		typed := &typedPackage{pkg: pkg}
-		for index, pathname := range pkg.CompiledGoFiles {
+		files := pkg.GoFiles
+		if len(files) == 0 {
+			files = pkg.CompiledGoFiles
+		}
+		for index, pathname := range files {
+			if index >= len(pkg.Syntax) {
+				break
+			}
 			source := c.fileByAbs[filepath.Clean(pathname)]
 			if source == nil {
 				continue

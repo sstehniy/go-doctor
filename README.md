@@ -41,6 +41,34 @@ Machine-readable output:
 go run ./cmd/go-doctor --format json .
 ```
 
+Diff-focused scan (auto base detection, fallback to staged/unstaged):
+
+```bash
+go run ./cmd/go-doctor --diff .
+```
+
+Diff-focused scan against an explicit base branch:
+
+```bash
+go run ./cmd/go-doctor --diff origin/main .
+```
+
+In diff mode, `govulncheck` is skipped by default. If you want the middle-ground mode that runs it only for changed modules:
+
+```bash
+go run ./cmd/go-doctor --diff --diff-govulncheck changed-modules-only .
+```
+
+## Scoring
+
+The health score is local-only and deterministic:
+
+- starts at `100`
+- applies severity penalties with per-rule occurrence caps
+- applies category multipliers
+- rounds once at the final score
+- maps labels to: `Excellent` (90-100), `Good` (75-89), `Needs work` (50-74), `Critical` (0-49)
+
 ## Rule Discovery
 
 List all available rules and selectors:

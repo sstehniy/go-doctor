@@ -111,6 +111,33 @@ func TestValidateRuleSelectionsAllowsCustomGroups(t *testing.T) {
 	}
 }
 
+func TestValidateDiffGovulncheck(t *testing.T) {
+	valid := []string{"", "skip", "changed-modules-only", "  changed-modules-only  "}
+	for _, value := range valid {
+		if err := ValidateDiffGovulncheck(value); err != nil {
+			t.Fatalf("expected %q to be valid, got %v", value, err)
+		}
+	}
+	if err := ValidateDiffGovulncheck("full"); err == nil {
+		t.Fatal("expected invalid mode to fail")
+	}
+}
+
+func TestApplyDiffGovulncheckMode(t *testing.T) {
+	cfg := File{
+		Scan: ScanConfig{
+			DiffGovulncheck: "changed-modules-only",
+		},
+	}
+	opts := DefaultOptions()
+	if err := cfg.Apply(&opts); err != nil {
+		t.Fatalf("apply config: %v", err)
+	}
+	if opts.DiffGovulncheck != "changed-modules-only" {
+		t.Fatalf("expected changed-modules-only mode, got %q", opts.DiffGovulncheck)
+	}
+}
+
 func boolPtr(value bool) *bool {
 	return &value
 }
