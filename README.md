@@ -34,8 +34,16 @@ go build ./cmd/go-doctor
 Run on the current repo:
 
 ```bash
-go run ./cmd/go-doctor .
+go-doctor .
 ```
+
+See all flags and examples:
+
+```bash
+go-doctor --help
+```
+
+Generated CLI reference: [docs/cli/go-doctor.md](./docs/cli/go-doctor.md)
 
 Install with `go install`:
 
@@ -52,31 +60,38 @@ go install github.com/sstehniy/go-doctor/cmd/go-doctor@v1.2.3
 Machine-readable output:
 
 ```bash
-go run ./cmd/go-doctor --format json .
+go-doctor --format json .
+```
+
+Shell completions:
+
+```bash
+go-doctor completion bash
+go-doctor completion zsh
 ```
 
 SARIF output for GitHub code scanning:
 
 ```bash
-go run ./cmd/go-doctor --format sarif --output results.sarif .
+go-doctor --format sarif --output results.sarif .
 ```
 
 Diff-focused scan (auto base detection, fallback to staged/unstaged):
 
 ```bash
-go run ./cmd/go-doctor --diff .
+go-doctor --diff .
 ```
 
 Diff-focused scan against an explicit base branch:
 
 ```bash
-go run ./cmd/go-doctor --diff origin/main .
+go-doctor --diff origin/main .
 ```
 
 In diff mode, `govulncheck` is skipped by default. If you want the middle-ground mode that runs it only for changed modules:
 
 ```bash
-go run ./cmd/go-doctor --diff --diff-govulncheck changed-modules-only .
+go-doctor --diff --diff-govulncheck changed-modules-only .
 ```
 
 ## Scoring
@@ -94,14 +109,14 @@ The health score is local-only and deterministic:
 List all available rules and selectors:
 
 ```bash
-go run ./cmd/go-doctor --list-rules
+go-doctor --list-rules
 ```
 
 Select rules explicitly:
 
 ```bash
-go run ./cmd/go-doctor --enable mod/not-tidy,build/mod-readonly-failure .
-go run ./cmd/go-doctor --disable fmt/not-gofmt .
+go-doctor --enable mod/not-tidy,build/mod-readonly-failure .
+go-doctor --disable fmt/not-gofmt .
 ```
 
 ## GitHub Code Scanning
@@ -138,7 +153,7 @@ For mature repos, adopt with a baseline first so legacy findings are visible but
 Local first run (creates baseline file if missing, outside CI):
 
 ```bash
-go run ./cmd/go-doctor --baseline .go-doctor-baseline.json --fail-on warning .
+go-doctor --baseline .go-doctor-baseline.json --fail-on warning .
 ```
 
 Then commit `.go-doctor-baseline.json` and keep running with the same baseline in CI. Existing findings stay visible as `(suppressed)`, while new findings fail the build based on `--fail-on`.
@@ -175,13 +190,13 @@ If you intentionally want to refresh baseline entries:
 
 ```bash
 rm -f .go-doctor-baseline.json
-go run ./cmd/go-doctor --baseline .go-doctor-baseline.json .
+go-doctor --baseline .go-doctor-baseline.json .
 ```
 
 To inspect all findings without applying baseline suppression:
 
 ```bash
-go run ./cmd/go-doctor --baseline .go-doctor-baseline.json --no-baseline .
+go-doctor --baseline .go-doctor-baseline.json --no-baseline .
 ```
 
 ## Repo Hygiene Rules

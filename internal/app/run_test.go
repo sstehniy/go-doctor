@@ -76,6 +76,126 @@ func TestVersionUsesBuildInfoWhenDefaultVersionIsDev(t *testing.T) {
 	}
 }
 
+func TestRunHelp(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"--help"}, &stdout, &stderr)
+	if code != ExitSuccess {
+		t.Fatalf("expected success, got %d: %s", code, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+
+	output := stdout.String()
+	for _, fragment := range []string{
+		"Usage:\n  go-doctor [flags] [target]",
+		"Examples:",
+		"Common Flags",
+		"Commands:",
+		"completion <shell>",
+	} {
+		if !strings.Contains(output, fragment) {
+			t.Fatalf("expected help output to contain %q, got %q", fragment, output)
+		}
+	}
+}
+
+func TestRunUnknownFlagReturnsUsage(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"--wat"}, &stdout, &stderr)
+	if code != ExitUsage {
+		t.Fatalf("expected usage exit, got %d", code)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected empty stdout, got %q", stdout.String())
+	}
+
+	errOutput := stderr.String()
+	if !strings.Contains(errOutput, "unknown flag: --wat") {
+		t.Fatalf("expected unknown flag error, got %q", errOutput)
+	}
+	if !strings.Contains(errOutput, usageHint) {
+		t.Fatalf("expected usage hint, got %q", errOutput)
+	}
+}
+
+func TestRunTooManyTargetsReturnsUsage(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"first", "second"}, &stdout, &stderr)
+	if code != ExitUsage {
+		t.Fatalf("expected usage exit, got %d", code)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected empty stdout, got %q", stdout.String())
+	}
+
+	errOutput := stderr.String()
+	if !strings.Contains(errOutput, "expected at most one target path") {
+		t.Fatalf("expected target path error, got %q", errOutput)
+	}
+	if !strings.Contains(errOutput, usageHint) {
+		t.Fatalf("expected usage hint, got %q", errOutput)
+	}
+}
+
+func TestRunCompletionScripts(t *testing.T) {
+	testCases := []struct {
+		name     string
+		args     []string
+		fragment string
+	}{
+		{name: "bash", args: []string{"completion", "bash"}, fragment: "__start_go-doctor"},
+		{name: "zsh", args: []string{"completion", "zsh"}, fragment: "#compdef go-doctor"},
+		{name: "fish", args: []string{"completion", "fish"}, fragment: "complete -c go-doctor"},
+		{name: "powershell", args: []string{"completion", "powershell"}, fragment: "Register-ArgumentCompleter"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			code := Run(context.Background(), testCase.args, &stdout, &stderr)
+			if code != ExitSuccess {
+				t.Fatalf("expected success, got %d: %s", code, stderr.String())
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("expected empty stderr, got %q", stderr.String())
+			}
+			if !strings.Contains(stdout.String(), testCase.fragment) {
+				t.Fatalf("expected completion output to contain %q, got %q", testCase.fragment, stdout.String())
+			}
+		})
+	}
+}
+
+func TestRunCompletionRejectsInvalidShell(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"completion", "tcsh"}, &stdout, &stderr)
+	if code != ExitUsage {
+		t.Fatalf("expected usage exit, got %d", code)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected empty stdout, got %q", stdout.String())
+	}
+
+	errOutput := stderr.String()
+	if !strings.Contains(errOutput, `unsupported shell "tcsh"`) {
+		t.Fatalf("expected invalid shell error, got %q", errOutput)
+	}
+	if !strings.Contains(errOutput, usageHint) {
+		t.Fatalf("expected usage hint, got %q", errOutput)
+	}
+}
+
 func TestRunJSONOutputWorkspace(t *testing.T) {
 	fixture := filepath.Join("..", "..", "testdata", "fixtures", "workspace")
 	configPath := writeNoAnalyzerConfig(t)
