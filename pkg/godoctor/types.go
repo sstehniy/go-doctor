@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stanislavstehniy/go-doctor/internal/analyzers/custom"
+	"github.com/stanislavstehniy/go-doctor/internal/analyzers/repohygiene"
 	"github.com/stanislavstehniy/go-doctor/internal/analyzers/thirdparty"
 	"github.com/stanislavstehniy/go-doctor/internal/diagnostics"
 	"github.com/stanislavstehniy/go-doctor/internal/discovery"
@@ -32,6 +33,7 @@ type Options struct {
 	DisableRules     []string
 	BaselinePath     string
 	NoBaseline       bool
+	RepoHygiene      bool
 	ThirdParty       bool
 	Custom           bool
 	IncludeGenerated bool
@@ -128,6 +130,11 @@ func Diagnose(ctx context.Context, target string, opts Options) (DiagnoseResult,
 		})
 	}
 	analyzers := make([]diagnostics.Analyzer, 0, 4)
+	if opts.RepoHygiene {
+		analyzers = append(analyzers, repohygiene.DefaultAnalyzers(targetSpec, opts.EnableRules, opts.DisableRules)...)
+	} else {
+		result.SkippedTools = append(result.SkippedTools, "repo-hygiene")
+	}
 	if opts.ThirdParty {
 		analyzers = append(analyzers, thirdparty.DefaultAnalyzers(targetSpec, opts.EnableRules, opts.DisableRules)...)
 	} else {
@@ -163,13 +170,15 @@ func Diagnose(ctx context.Context, target string, opts Options) (DiagnoseResult,
 }
 
 func ListRules() []string {
-	rules := thirdparty.SupportedRules()
+	rules := repohygiene.SupportedRules()
+	rules = append(rules, thirdparty.SupportedRules()...)
 	rules = append(rules, custom.RuleNames()...)
 	return uniqueSorted(rules)
 }
 
 func ListRuleSelectors() []string {
-	selectors := ListRules()
+	selectors := repohygiene.SupportedSelectors()
+	selectors = append(selectors, ListRules()...)
 	selectors = append(selectors, custom.SelectorNames()...)
 	return uniqueSorted(selectors)
 }

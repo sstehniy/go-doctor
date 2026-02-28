@@ -83,6 +83,7 @@ func TestLoadRejectsUnknownRules(t *testing.T) {
 func TestApplyAnalyzerToggles(t *testing.T) {
 	cfg := File{
 		Analyzers: AnalyzersConfig{
+			Repo:       boolPtr(false),
 			ThirdParty: boolPtr(false),
 			Custom:     boolPtr(false),
 		},
@@ -91,6 +92,9 @@ func TestApplyAnalyzerToggles(t *testing.T) {
 	opts := DefaultOptions()
 	if err := cfg.Apply(&opts); err != nil {
 		t.Fatalf("apply config: %v", err)
+	}
+	if opts.RepoHygiene {
+		t.Fatal("expected repo hygiene analyzers disabled")
 	}
 	if opts.ThirdParty {
 		t.Fatal("expected third-party analyzers disabled")

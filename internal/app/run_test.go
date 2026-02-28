@@ -76,11 +76,53 @@ func TestRunJSONOutputWorkspace(t *testing.T) {
 	}
 }
 
+func TestRunJSONOutputRepoHygiene(t *testing.T) {
+	fixture := filepath.Join("..", "..", "testdata", "fixtures", "repo-hygiene", "not-tidy")
+	configPath := writeRepoOnlyConfig(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"--config", configPath, "--format=json", "--enable=mod/not-tidy", fixture}, &stdout, &stderr)
+	if code != ExitSuccess {
+		t.Fatalf("expected success, got %d: %s", code, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+
+	var payload struct {
+		Diagnostics []struct {
+			Plugin string `json:"plugin"`
+			Rule   string `json:"rule"`
+			Path   string `json:"path"`
+		} `json:"diagnostics"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal json: %v", err)
+	}
+	if len(payload.Diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic, got %d", len(payload.Diagnostics))
+	}
+	if payload.Diagnostics[0].Plugin != "repo" || payload.Diagnostics[0].Rule != "mod/not-tidy" || payload.Diagnostics[0].Path != "go.mod" {
+		t.Fatalf("unexpected diagnostic: %#v", payload.Diagnostics[0])
+	}
+}
+
 func writeNoAnalyzerConfig(t *testing.T) string {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), ".go-doctor.yaml")
-	if err := os.WriteFile(path, []byte("analyzers:\n  thirdParty: false\n  custom: false\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("analyzers:\n  repo: false\n  thirdParty: false\n  custom: false\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	return path
+}
+
+func writeRepoOnlyConfig(t *testing.T) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), ".go-doctor.yaml")
+	if err := os.WriteFile(path, []byte("analyzers:\n  repo: true\n  thirdParty: false\n  custom: false\n"), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	return path

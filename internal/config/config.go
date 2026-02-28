@@ -81,6 +81,7 @@ type Layer struct {
 }
 
 type AnalyzersConfig struct {
+	Repo       *bool `json:"repo" yaml:"repo"`
 	ThirdParty *bool `json:"thirdParty" yaml:"thirdParty"`
 	Custom     *bool `json:"custom" yaml:"custom"`
 }
@@ -92,6 +93,7 @@ func DefaultOptions() godoctor.Options {
 		FailOn:      "error",
 		Timeout:     defaultTimeout,
 		Concurrency: DefaultConcurrency(),
+		RepoHygiene: true,
 		ThirdParty:  true,
 		Custom:      true,
 	}
@@ -184,6 +186,9 @@ func (f File) Apply(opts *godoctor.Options) error {
 	}
 	if f.Analyzers.Custom != nil {
 		opts.Custom = *f.Analyzers.Custom
+	}
+	if f.Analyzers.Repo != nil {
+		opts.RepoHygiene = *f.Analyzers.Repo
 	}
 	if len(f.Architecture.Layers) > 0 {
 		opts.Architecture = make([]godoctor.Layer, 0, len(f.Architecture.Layers))
