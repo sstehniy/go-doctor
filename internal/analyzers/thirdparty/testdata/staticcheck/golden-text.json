@@ -1,0 +1,12 @@
+[
+  {
+    "path": "main.go",
+    "line": 8,
+    "column": 2,
+    "plugin": "staticcheck",
+    "rule": "QF1001",
+    "severity": "warning",
+    "category": "quickfix",
+    "message": "bad regexp"
+  }
+]

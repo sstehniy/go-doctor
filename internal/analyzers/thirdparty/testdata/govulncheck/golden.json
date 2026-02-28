@@ -1,0 +1,15 @@
+[
+  {
+    "path": "main.go",
+    "line": 12,
+    "column": 3,
+    "plugin": "govulncheck",
+    "rule": "GO-2024-0001",
+    "severity": "error",
+    "category": "security",
+    "message": "reachable vuln",
+    "help": "upgrade to v1.2.3",
+    "package": "example.com/mod/pkg",
+    "module": "example.com/mod"
+  }
+]

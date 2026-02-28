@@ -77,3 +77,27 @@ func TestLoadRejectsUnknownRules(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestApplyAnalyzerToggles(t *testing.T) {
+	cfg := File{
+		Analyzers: AnalyzersConfig{
+			ThirdParty: boolPtr(false),
+			Custom:     boolPtr(false),
+		},
+	}
+
+	opts := DefaultOptions()
+	if err := cfg.Apply(&opts); err != nil {
+		t.Fatalf("apply config: %v", err)
+	}
+	if opts.ThirdParty {
+		t.Fatal("expected third-party analyzers disabled")
+	}
+	if opts.Custom {
+		t.Fatal("expected custom analyzers disabled")
+	}
+}
+
+func boolPtr(value bool) *bool {
+	return &value
+}

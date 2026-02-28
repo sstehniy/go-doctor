@@ -91,6 +91,8 @@ func DefaultOptions() godoctor.Options {
 		FailOn:      "error",
 		Timeout:     defaultTimeout,
 		Concurrency: DefaultConcurrency(),
+		ThirdParty:  true,
+		Custom:      true,
 	}
 }
 
@@ -172,6 +174,12 @@ func (f File) Apply(opts *godoctor.Options) error {
 	}
 	if len(f.Rules.Disable) > 0 {
 		opts.DisableRules = slices.Clone(f.Rules.Disable)
+	}
+	if f.Analyzers.ThirdParty != nil {
+		opts.ThirdParty = *f.Analyzers.ThirdParty
+	}
+	if f.Analyzers.Custom != nil {
+		opts.Custom = *f.Analyzers.Custom
 	}
 	return nil
 }

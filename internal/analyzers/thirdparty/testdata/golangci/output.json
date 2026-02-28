@@ -1,0 +1,1 @@
+{"Issues":[{"FromLinter":"sqlclosecheck","Text":"sql.Rows.Close must be checked","Pos":{"Filename":"/repo/db.go","Line":5,"Column":1}},{"FromLinter":"rowserrcheck","Text":"check rows.Err in rows loop","Pos":{"Filename":"/repo/db.go","Line":9,"Column":2}}]}

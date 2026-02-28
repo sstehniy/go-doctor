@@ -1,0 +1,12 @@
+[
+  {
+    "path": "main.go",
+    "line": 10,
+    "column": 4,
+    "plugin": "govet",
+    "rule": "printf",
+    "severity": "error",
+    "category": "correctness",
+    "message": "printf format %d has arg x of wrong type string"
+  }
+]

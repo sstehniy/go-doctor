@@ -1,3 +1,3 @@
 package thirdparty
 
-// Package thirdparty reserves the third-party analyzer namespace for later milestones.
+// Package thirdparty provides adapters for external analyzers.

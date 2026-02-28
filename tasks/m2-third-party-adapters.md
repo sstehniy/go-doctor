@@ -1,5 +1,7 @@
 # 1. Executive Summary
 
+Status: Done
+
 - **Problem Statement**: The core CLI can exist without analyzers, but it delivers no real health signal until it can ingest trusted third-party tools. The second milestone must turn external tool output into normalized diagnostics without making scans flaky.
 - **Proposed Solution**: Add adapters for `go vet`, `staticcheck`, `govulncheck`, and a controlled subset of `golangci-lint` analyzers, then normalize all findings into the shared `Diagnostic` model with tool error handling.
 - **Success Criteria**:

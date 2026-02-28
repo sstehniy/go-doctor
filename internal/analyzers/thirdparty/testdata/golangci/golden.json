@@ -1,0 +1,22 @@
+[
+  {
+    "path": "db.go",
+    "line": 5,
+    "column": 1,
+    "plugin": "golangci-lint",
+    "rule": "sqlclosecheck",
+    "severity": "error",
+    "category": "reliability",
+    "message": "sql.Rows.Close must be checked"
+  },
+  {
+    "path": "db.go",
+    "line": 9,
+    "column": 2,
+    "plugin": "golangci-lint",
+    "rule": "rowserrcheck",
+    "severity": "error",
+    "category": "reliability",
+    "message": "check rows.Err in rows loop"
+  }
+]

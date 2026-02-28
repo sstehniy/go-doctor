@@ -1,3 +1,3 @@
 package custom
 
-// Package custom reserves the custom analyzer namespace for later milestones.
+// Package custom provides first-party analyzer registration points.

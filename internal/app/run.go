@@ -76,6 +76,21 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 
 	result, err := godoctor.Diagnose(ctx, cli.target, opts)
 	if err != nil {
+		if result.SchemaVersion != 0 {
+			rendered, renderErr := renderOutput(result, opts)
+			if renderErr == nil && len(rendered) > 0 {
+				if _, writeErr := stdout.Write(rendered); writeErr != nil {
+					fmt.Fprintln(stderr, writeErr)
+					return ExitFatal
+				}
+				if opts.OutputPath != "" {
+					if writeErr := os.WriteFile(opts.OutputPath, rendered, 0o644); writeErr != nil {
+						fmt.Fprintln(stderr, writeErr)
+						return ExitFatal
+					}
+				}
+			}
+		}
 		fmt.Fprintln(stderr, err)
 		if errors.Is(err, context.DeadlineExceeded) {
 			return ExitFatal

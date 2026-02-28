@@ -1,0 +1,14 @@
+[
+  {
+    "path": "main.go",
+    "line": 8,
+    "column": 2,
+    "endLine": 8,
+    "endColumn": 6,
+    "plugin": "staticcheck",
+    "rule": "SA1000",
+    "severity": "warning",
+    "category": "correctness",
+    "message": "bad regexp"
+  }
+]

@@ -1,0 +1,1 @@
+/repo/main.go:8:2: bad regexp (QF1001)

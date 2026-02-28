@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"time"
 
+	"github.com/stanislavstehniy/go-doctor/internal/analyzers/custom"
+	"github.com/stanislavstehniy/go-doctor/internal/analyzers/thirdparty"
+	"github.com/stanislavstehniy/go-doctor/internal/diagnostics"
 	"github.com/stanislavstehniy/go-doctor/internal/discovery"
+	"github.com/stanislavstehniy/go-doctor/internal/model"
 	"github.com/stanislavstehniy/go-doctor/internal/scoring"
 )
 
@@ -28,30 +31,11 @@ type Options struct {
 	DisableRules []string
 	BaselinePath string
 	NoBaseline   bool
+	ThirdParty   bool
+	Custom       bool
 }
 
-type Diagnostic struct {
-	Path      string `json:"path,omitempty"`
-	Line      int    `json:"line,omitempty"`
-	Column    int    `json:"column,omitempty"`
-	EndLine   int    `json:"endLine,omitempty"`
-	EndColumn int    `json:"endColumn,omitempty"`
-
-	Plugin   string `json:"plugin,omitempty"`
-	Rule     string `json:"rule,omitempty"`
-	Severity string `json:"severity,omitempty"`
-	Category string `json:"category,omitempty"`
-
-	Message string `json:"message"`
-	Help    string `json:"help,omitempty"`
-
-	Symbol     string `json:"symbol,omitempty"`
-	Package    string `json:"package,omitempty"`
-	Module     string `json:"module,omitempty"`
-	DocsURL    string `json:"docsUrl,omitempty"`
-	Weight     int    `json:"weight,omitempty"`
-	Suppressed bool   `json:"suppressed,omitempty"`
-}
+type Diagnostic = model.Diagnostic
 
 type ProjectInfo struct {
 	Target       string   `json:"target"`
@@ -69,11 +53,7 @@ type ScoreResult struct {
 	Grade   string `json:"grade,omitempty"`
 }
 
-type ToolError struct {
-	Tool    string `json:"tool"`
-	Message string `json:"message"`
-	Fatal   bool   `json:"fatal,omitempty"`
-}
+type ToolError = model.ToolError
 
 type DiagnoseResult struct {
 	SchemaVersion int          `json:"schemaVersion"`
@@ -120,6 +100,37 @@ func Diagnose(ctx context.Context, target string, opts Options) (DiagnoseResult,
 		ToolErrors:    []ToolError{},
 		ElapsedMillis: time.Since(start).Milliseconds(),
 	}
+
+	targetSpec := diagnostics.Target{
+		RepoRoot:        info.Root,
+		Mode:            info.Mode,
+		GoVersion:       info.GoVersion,
+		ModuleRoots:     append([]string(nil), info.ModuleRoots...),
+		PackagePatterns: append([]string(nil), opts.Packages...),
+		ModulePatterns:  append([]string(nil), opts.Modules...),
+	}
+	analyzers := make([]diagnostics.Analyzer, 0, 4)
+	if opts.ThirdParty {
+		analyzers = append(analyzers, thirdparty.DefaultAnalyzers(targetSpec, opts.EnableRules, opts.DisableRules)...)
+	} else {
+		result.SkippedTools = append(result.SkippedTools, "third-party")
+	}
+	if opts.Custom {
+		analyzers = append(analyzers, custom.DefaultAnalyzers(targetSpec, opts.EnableRules, opts.DisableRules)...)
+	} else {
+		result.SkippedTools = append(result.SkippedTools, "custom")
+	}
+
+	perAnalyzerTimeout := defaultPerAnalyzerTimeout(opts.Timeout)
+	diagnosticsOut, toolErrors := diagnostics.Run(ctx, analyzers, targetSpec, opts.Concurrency, perAnalyzerTimeout)
+	result.Diagnostics = diagnosticsOut
+	result.ToolErrors = toolErrors
+	score = scoring.Score(len(diagnosticsOut), opts.Score)
+	result.ElapsedMillis = time.Since(start).Milliseconds()
+	if len(analyzers) > 0 && len(diagnosticsOut) == 0 && len(toolErrors) >= len(analyzers) {
+		return result, fmt.Errorf("all analyzers failed")
+	}
+
 	if score.Enabled {
 		result.Score = &ScoreResult{
 			Enabled: true,
@@ -134,7 +145,7 @@ func Diagnose(ctx context.Context, target string, opts Options) (DiagnoseResult,
 }
 
 func ListRules() []string {
-	return nil
+	return thirdparty.SupportedRules()
 }
 
 func RenderSARIF(result DiagnoseResult) ([]byte, error) {
@@ -157,5 +168,12 @@ func (d *Duration) Set(value string) error {
 }
 
 func NormalizePath(path string) string {
-	return filepath.ToSlash(filepath.Clean(path))
+	return model.NormalizePath(path)
+}
+
+func defaultPerAnalyzerTimeout(total time.Duration) time.Duration {
+	if total <= 0 {
+		return 0
+	}
+	return total
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,10 +12,11 @@ import (
 
 func TestRunTextOutputSingleModule(t *testing.T) {
 	fixture := filepath.Join("..", "..", "testdata", "fixtures", "single-module")
+	configPath := writeNoAnalyzerConfig(t)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	code := Run(context.Background(), []string{fixture}, &stdout, &stderr)
+	code := Run(context.Background(), []string{"--config", configPath, fixture}, &stdout, &stderr)
 	if code != ExitSuccess {
 		t.Fatalf("expected success, got %d: %s", code, stderr.String())
 	}
@@ -36,10 +38,11 @@ func TestRunTextOutputSingleModule(t *testing.T) {
 
 func TestRunJSONOutputWorkspace(t *testing.T) {
 	fixture := filepath.Join("..", "..", "testdata", "fixtures", "workspace")
+	configPath := writeNoAnalyzerConfig(t)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	code := Run(context.Background(), []string{"--format=json", fixture}, &stdout, &stderr)
+	code := Run(context.Background(), []string{"--config", configPath, "--format=json", fixture}, &stdout, &stderr)
 	if code != ExitSuccess {
 		t.Fatalf("expected success, got %d: %s", code, stderr.String())
 	}
@@ -71,4 +74,14 @@ func TestRunJSONOutputWorkspace(t *testing.T) {
 	if len(payload.Diagnostics) != 0 {
 		t.Fatalf("expected no diagnostics, got %d", len(payload.Diagnostics))
 	}
+}
+
+func writeNoAnalyzerConfig(t *testing.T) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), ".go-doctor.yaml")
+	if err := os.WriteFile(path, []byte("analyzers:\n  thirdParty: false\n  custom: false\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	return path
 }
