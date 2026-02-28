@@ -52,6 +52,7 @@ jobs:
           if [[ -z "${version}" || "${version}" == "main" || "${version}" == "master" ]]; then
             version="dev-${GITHUB_SHA::8}"
           fi
+          version="${version//\//-}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
       - name: Build release binary
