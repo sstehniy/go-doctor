@@ -32,13 +32,14 @@ type File struct {
 }
 
 type ScanConfig struct {
-	Diff        string   `json:"diff" yaml:"diff"`
-	Packages    []string `json:"packages" yaml:"packages"`
-	Modules     []string `json:"modules" yaml:"modules"`
-	Timeout     string   `json:"timeout" yaml:"timeout"`
-	Concurrency int      `json:"concurrency" yaml:"concurrency"`
-	Baseline    string   `json:"baseline" yaml:"baseline"`
-	NoBaseline  bool     `json:"noBaseline" yaml:"noBaseline"`
+	Diff             string   `json:"diff" yaml:"diff"`
+	Packages         []string `json:"packages" yaml:"packages"`
+	Modules          []string `json:"modules" yaml:"modules"`
+	Timeout          string   `json:"timeout" yaml:"timeout"`
+	Concurrency      int      `json:"concurrency" yaml:"concurrency"`
+	Baseline         string   `json:"baseline" yaml:"baseline"`
+	NoBaseline       bool     `json:"noBaseline" yaml:"noBaseline"`
+	IncludeGenerated bool     `json:"includeGenerated" yaml:"includeGenerated"`
 }
 
 type OutputConfig struct {
@@ -151,6 +152,9 @@ func (f File) Apply(opts *godoctor.Options) error {
 	if f.Scan.NoBaseline {
 		opts.NoBaseline = true
 	}
+	if f.Scan.IncludeGenerated {
+		opts.IncludeGenerated = true
+	}
 	if f.Output.Format != "" {
 		opts.Format = f.Output.Format
 	}
@@ -180,6 +184,16 @@ func (f File) Apply(opts *godoctor.Options) error {
 	}
 	if f.Analyzers.Custom != nil {
 		opts.Custom = *f.Analyzers.Custom
+	}
+	if len(f.Architecture.Layers) > 0 {
+		opts.Architecture = make([]godoctor.Layer, 0, len(f.Architecture.Layers))
+		for _, layer := range f.Architecture.Layers {
+			opts.Architecture = append(opts.Architecture, godoctor.Layer{
+				Name:    layer.Name,
+				Include: slices.Clone(layer.Include),
+				Allow:   slices.Clone(layer.Allow),
+			})
+		}
 	}
 	return nil
 }

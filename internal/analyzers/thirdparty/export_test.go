@@ -41,6 +41,10 @@ func ExportPackagePatterns(target diagnostics.Target) []string {
 	return packagePatterns(target)
 }
 
+func ExportFilterGeneratedDiagnostics(target diagnostics.Target, diagnosticsOut []model.Diagnostic) []model.Diagnostic {
+	return filterGeneratedDiagnostics(target, diagnosticsOut)
+}
+
 func ExportNewGovulncheckAdapter() diagnostics.Analyzer {
 	return newGovulncheckAdapter()
 }

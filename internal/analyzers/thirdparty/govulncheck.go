@@ -54,7 +54,7 @@ func (govulncheckAdapter) Run(ctx context.Context, target diagnostics.Target) di
 		if result.exitCode != 0 && len(diagnosticsOut) == 0 {
 			return toolFailure("govulncheck", fmt.Errorf("govulncheck exited with code %d", result.exitCode))
 		}
-		combined.Diagnostics = append(combined.Diagnostics, diagnosticsOut...)
+		combined.Diagnostics = append(combined.Diagnostics, filterGeneratedDiagnostics(target, diagnosticsOut)...)
 	}
 	return combined
 }

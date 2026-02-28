@@ -16,13 +16,21 @@ type Analyzer interface {
 }
 
 type Target struct {
-	RepoRoot        string
-	Mode            string
-	GoVersion       string
-	ModuleRoots     []string
-	PackagePatterns []string
-	ModulePatterns  []string
-	IncludeFiles    []string
+	RepoRoot         string
+	Mode             string
+	GoVersion        string
+	ModuleRoots      []string
+	PackagePatterns  []string
+	ModulePatterns   []string
+	IncludeFiles     []string
+	IncludeGenerated bool
+	Architecture     []Layer
+}
+
+type Layer struct {
+	Name    string
+	Include []string
+	Allow   []string
 }
 
 type AnalyzerMetadata struct {

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stanislavstehniy/go-doctor/pkg/godoctor"
 )
 
 func TestLoadPrecedence(t *testing.T) {
@@ -95,6 +97,13 @@ func TestApplyAnalyzerToggles(t *testing.T) {
 	}
 	if opts.Custom {
 		t.Fatal("expected custom analyzers disabled")
+	}
+}
+
+func TestValidateRuleSelectionsAllowsCustomGroups(t *testing.T) {
+	selectors := godoctor.ListRuleSelectors()
+	if err := ValidateRuleSelections([]string{"context"}, []string{"context/not-propagated"}, selectors); err != nil {
+		t.Fatalf("expected custom group selection to validate, got %v", err)
 	}
 }
 

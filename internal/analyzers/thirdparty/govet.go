@@ -38,7 +38,7 @@ func (goVetAdapter) Run(ctx context.Context, target diagnostics.Target) diagnost
 	}
 	return diagnostics.Result{
 		Metadata:    diagnostics.AnalyzerMetadata{Name: "govet", Scope: "package"},
-		Diagnostics: parseGoVetOutput(text, target.RepoRoot),
+		Diagnostics: filterGeneratedDiagnostics(target, parseGoVetOutput(text, target.RepoRoot)),
 	}
 }
 

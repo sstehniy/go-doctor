@@ -38,6 +38,7 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 	}
 
 	rules := godoctor.ListRules()
+	selectors := godoctor.ListRuleSelectors()
 	if cli.listRules {
 		if len(rules) == 0 {
 			fmt.Fprintln(stdout, "no rules registered")
@@ -50,7 +51,7 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 	}
 
 	opts := cfgpkg.DefaultOptions()
-	configFile, _, err := cfgpkg.Load(cli.target, cli.configPath, rules)
+	configFile, _, err := cfgpkg.Load(cli.target, cli.configPath, selectors)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return ExitUsage
@@ -69,7 +70,7 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 		fmt.Fprintln(stderr, err)
 		return ExitUsage
 	}
-	if err := cfgpkg.ValidateRuleSelections(opts.EnableRules, opts.DisableRules, rules); err != nil {
+	if err := cfgpkg.ValidateRuleSelections(opts.EnableRules, opts.DisableRules, selectors); err != nil {
 		fmt.Fprintln(stderr, err)
 		return ExitUsage
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/stanislavstehniy/go-doctor/internal/analyzers/custom"
@@ -15,24 +16,32 @@ import (
 )
 
 type Options struct {
-	ConfigPath   string
-	Format       string
-	OutputPath   string
-	Verbose      bool
-	Quiet        bool
-	Score        bool
-	FailOn       string
-	DiffBase     string
-	Packages     []string
-	Modules      []string
-	Timeout      time.Duration
-	Concurrency  int
-	EnableRules  []string
-	DisableRules []string
-	BaselinePath string
-	NoBaseline   bool
-	ThirdParty   bool
-	Custom       bool
+	ConfigPath       string
+	Format           string
+	OutputPath       string
+	Verbose          bool
+	Quiet            bool
+	Score            bool
+	FailOn           string
+	DiffBase         string
+	Packages         []string
+	Modules          []string
+	Timeout          time.Duration
+	Concurrency      int
+	EnableRules      []string
+	DisableRules     []string
+	BaselinePath     string
+	NoBaseline       bool
+	ThirdParty       bool
+	Custom           bool
+	IncludeGenerated bool
+	Architecture     []Layer
+}
+
+type Layer struct {
+	Name    string
+	Include []string
+	Allow   []string
 }
 
 type Diagnostic = model.Diagnostic
@@ -102,12 +111,21 @@ func Diagnose(ctx context.Context, target string, opts Options) (DiagnoseResult,
 	}
 
 	targetSpec := diagnostics.Target{
-		RepoRoot:        info.Root,
-		Mode:            info.Mode,
-		GoVersion:       info.GoVersion,
-		ModuleRoots:     append([]string(nil), info.ModuleRoots...),
-		PackagePatterns: append([]string(nil), opts.Packages...),
-		ModulePatterns:  append([]string(nil), opts.Modules...),
+		RepoRoot:         info.Root,
+		Mode:             info.Mode,
+		GoVersion:        info.GoVersion,
+		ModuleRoots:      append([]string(nil), info.ModuleRoots...),
+		PackagePatterns:  append([]string(nil), opts.Packages...),
+		ModulePatterns:   append([]string(nil), opts.Modules...),
+		IncludeGenerated: opts.IncludeGenerated,
+		Architecture:     make([]diagnostics.Layer, 0, len(opts.Architecture)),
+	}
+	for _, layer := range opts.Architecture {
+		targetSpec.Architecture = append(targetSpec.Architecture, diagnostics.Layer{
+			Name:    layer.Name,
+			Include: append([]string(nil), layer.Include...),
+			Allow:   append([]string(nil), layer.Allow...),
+		})
 	}
 	analyzers := make([]diagnostics.Analyzer, 0, 4)
 	if opts.ThirdParty {
@@ -145,7 +163,15 @@ func Diagnose(ctx context.Context, target string, opts Options) (DiagnoseResult,
 }
 
 func ListRules() []string {
-	return thirdparty.SupportedRules()
+	rules := thirdparty.SupportedRules()
+	rules = append(rules, custom.RuleNames()...)
+	return uniqueSorted(rules)
+}
+
+func ListRuleSelectors() []string {
+	selectors := ListRules()
+	selectors = append(selectors, custom.SelectorNames()...)
+	return uniqueSorted(selectors)
 }
 
 func RenderSARIF(result DiagnoseResult) ([]byte, error) {
@@ -176,4 +202,17 @@ func defaultPerAnalyzerTimeout(total time.Duration) time.Duration {
 		return 0
 	}
 	return total
+}
+
+func uniqueSorted(values []string) []string {
+	set := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		set[value] = struct{}{}
+	}
+	out := make([]string, 0, len(set))
+	for value := range set {
+		out = append(out, value)
+	}
+	slices.Sort(out)
+	return out
 }

@@ -41,7 +41,7 @@ func (staticcheckAdapter) Run(ctx context.Context, target diagnostics.Target) di
 	}
 	return diagnostics.Result{
 		Metadata:    diagnostics.AnalyzerMetadata{Name: "staticcheck", Scope: "package"},
-		Diagnostics: diagnosticsOut,
+		Diagnostics: filterGeneratedDiagnostics(target, diagnosticsOut),
 	}
 }
 

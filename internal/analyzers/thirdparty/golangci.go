@@ -48,7 +48,7 @@ func (g golangciAdapter) Run(ctx context.Context, target diagnostics.Target) dia
 	}
 	return diagnostics.Result{
 		Metadata:    diagnostics.AnalyzerMetadata{Name: "golangci-lint", Scope: "package"},
-		Diagnostics: diagnosticsOut,
+		Diagnostics: filterGeneratedDiagnostics(target, diagnosticsOut),
 	}
 }
 
