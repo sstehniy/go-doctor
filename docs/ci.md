@@ -51,3 +51,27 @@ A full runnable example is in [examples/go-doctor-sarif-workflow.yml](./examples
   - `darwin/amd64`, `darwin/arm64`
   - `windows/amd64`, `windows/arm64`
 - `release-packaging` runs on `v*` tags and uploads artifacts to GitHub Releases.
+
+## Main branch protection (GitHub Ruleset)
+
+Configure this in GitHub:
+`Settings -> Rules -> Rulesets -> main`.
+
+Recommended ruleset values for `main`:
+
+- Target branch pattern: `main`
+- Enforcement status: `Active`
+- Bypass list: none
+- Block force pushes: enabled
+- Restrict deletions: enabled
+- Require pull request before merging: enabled
+- Required approving reviews: `0`
+- Require status checks to pass: enabled
+- Required status check: `release-smoke-gate`
+- Required status check: `owner-approval-gate`
+
+Notes:
+
+- `release-smoke-gate` passes only when all smoke matrix jobs pass.
+- `owner-approval-gate` requires owner approval for PRs opened by non-owners.
+- Owner-authored PRs pass `owner-approval-gate` without extra reviewer.

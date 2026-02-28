@@ -1,0 +1,55 @@
+name: owner-approval-gate
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  owner-approval-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const ownerLogin = context.repo.owner.toLowerCase();
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              core.setFailed("No pull request found in event payload.");
+              return;
+            }
+
+            const authorLogin = pr.user.login.toLowerCase();
+            if (authorLogin === ownerLogin) {
+              core.info("PR author is repository owner; no external approval required.");
+              return;
+            }
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              per_page: 100,
+            });
+
+            const ownerReviews = reviews
+              .filter((review) => review.user && review.user.login.toLowerCase() === ownerLogin)
+              .sort((left, right) => new Date(left.submitted_at) - new Date(right.submitted_at));
+
+            if (ownerReviews.length === 0) {
+              core.setFailed("Owner approval is required for pull requests opened by other users.");
+              return;
+            }
+
+            const latestOwnerReview = ownerReviews[ownerReviews.length - 1];
+            if (latestOwnerReview.state !== "APPROVED") {
+              core.setFailed(`Latest owner review is '${latestOwnerReview.state}', expected 'APPROVED'.`);
+              return;
+            }
+
+            core.info("Owner approval detected.");
