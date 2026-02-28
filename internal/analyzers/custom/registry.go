@@ -23,6 +23,17 @@ type rule struct {
 	run  func(*analysisContext) []model.Diagnostic
 }
 
+func RuleDescriptors() []Descriptor {
+	out := make([]Descriptor, 0, len(registry))
+	for _, candidate := range registry {
+		out = append(out, candidate.desc)
+	}
+	slices.SortFunc(out, func(left, right Descriptor) int {
+		return strings.Compare(left.Rule, right.Rule)
+	})
+	return out
+}
+
 func RuleNames() []string {
 	out := make([]string, 0, len(registry))
 	for _, rule := range registry {

@@ -1,0 +1,93 @@
+name: "go-doctor SARIF"
+description: "Install go-doctor from releases, run SARIF scan, upload code-scanning results, and expose summary outputs."
+
+inputs:
+  directory:
+    description: "Target directory to scan."
+    required: false
+    default: "."
+  format:
+    description: "Optional secondary machine-readable pass for outputs (`sarif` or `json`)."
+    required: false
+    default: "sarif"
+  fail-on:
+    description: "Failure threshold (`none`, `info`, `warning`, `error`)."
+    required: false
+    default: "error"
+  diff:
+    description: "Diff base (`auto` or explicit branch/ref). Empty disables diff mode."
+    required: false
+    default: ""
+  config:
+    description: "Path to go-doctor config file."
+    required: false
+    default: ""
+  github-token:
+    description: "Optional token for release API access (future/private use)."
+    required: false
+    default: ""
+  version:
+    description: "Release version to install (`latest` or a tag like `v1.2.3`)."
+    required: false
+    default: "latest"
+  repository:
+    description: "Repository hosting go-doctor release assets (`owner/repo`)."
+    required: false
+    default: "stanislavstehniy/go-doctor"
+  upload-sarif:
+    description: "Upload SARIF with github/codeql-action/upload-sarif."
+    required: false
+    default: "true"
+
+outputs:
+  score:
+    description: "go-doctor score value when available."
+    value: ${{ steps.scan.outputs.score }}
+  findings:
+    description: "Total findings count."
+    value: ${{ steps.scan.outputs.findings }}
+  errors:
+    description: "Findings with `error` severity."
+    value: ${{ steps.scan.outputs.errors }}
+  warnings:
+    description: "Findings with `warning` severity."
+    value: ${{ steps.scan.outputs.warnings }}
+  sarif-path:
+    description: "Path to generated SARIF file."
+    value: ${{ steps.scan.outputs.sarif-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - id: install
+      shell: bash
+      env:
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_REPOSITORY: ${{ inputs.repository }}
+      run: |
+        set -euo pipefail
+        bash "${{ github.action_path }}/run.sh" install
+
+    - id: scan
+      shell: bash
+      env:
+        INPUT_DIRECTORY: ${{ inputs.directory }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_DIFF: ${{ inputs.diff }}
+        INPUT_CONFIG: ${{ inputs.config }}
+      run: |
+        set -euo pipefail
+        bash "${{ github.action_path }}/run.sh" scan
+
+    - name: Upload SARIF
+      if: ${{ always() && inputs.upload-sarif == 'true' && steps.scan.outputs.sarif-path != '' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.scan.outputs.sarif-path }}
+
+    - name: Respect go-doctor exit code
+      if: ${{ steps.scan.outputs.scan-exit-code != '0' }}
+      shell: bash
+      run: exit "${{ steps.scan.outputs.scan-exit-code }}"

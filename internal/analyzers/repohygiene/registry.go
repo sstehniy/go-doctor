@@ -24,6 +24,17 @@ type rule struct {
 	run  func(context.Context, *analysisContext) ([]model.Diagnostic, []model.ToolError)
 }
 
+func RuleDescriptors() []Descriptor {
+	out := make([]Descriptor, 0, len(registry))
+	for _, candidate := range registry {
+		out = append(out, candidate.desc)
+	}
+	slices.SortFunc(out, func(left, right Descriptor) int {
+		return strings.Compare(left.Rule, right.Rule)
+	})
+	return out
+}
+
 // SupportedRules returns the repo-hygiene rule names.
 func SupportedRules() []string {
 	out := make([]string, 0, len(registry))

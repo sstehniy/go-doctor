@@ -1,3 +1,3 @@
 package sarif
 
-// Package sarif reserves SARIF rendering support for later milestones.
+// Package sarif renders go-doctor results as SARIF 2.1.0.

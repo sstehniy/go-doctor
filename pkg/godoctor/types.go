@@ -2,7 +2,6 @@ package godoctor
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -18,6 +17,7 @@ import (
 	"github.com/stanislavstehniy/go-doctor/internal/diff"
 	"github.com/stanislavstehniy/go-doctor/internal/discovery"
 	"github.com/stanislavstehniy/go-doctor/internal/model"
+	sarifoutput "github.com/stanislavstehniy/go-doctor/internal/output/sarif"
 	"github.com/stanislavstehniy/go-doctor/internal/scoring"
 	"github.com/stanislavstehniy/go-doctor/internal/suppressions"
 )
@@ -274,7 +274,58 @@ func ListRuleSelectors() []string {
 }
 
 func RenderSARIF(result DiagnoseResult) ([]byte, error) {
-	return nil, errors.New("sarif output is reserved for a later milestone")
+	input := sarifoutput.Input{
+		ProjectRoot:  result.Project.Root,
+		Diagnostics:  result.Diagnostics,
+		ToolErrors:   result.ToolErrors,
+		RuleMetadata: sarifRuleMetadata(),
+	}
+	if result.Score != nil && result.Score.Enabled {
+		input.ScoreEnabled = true
+		input.ScoreValue = result.Score.Value
+		input.ScoreMax = result.Score.Max
+		input.ScoreGrade = result.Score.Grade
+	}
+	return sarifoutput.Render(input)
+}
+
+func sarifRuleMetadata() []sarifoutput.RuleMetadata {
+	out := make([]sarifoutput.RuleMetadata, 0, len(custom.RuleDescriptors())+len(repohygiene.RuleDescriptors())+len(thirdparty.RuleDescriptors()))
+	for _, descriptor := range custom.RuleDescriptors() {
+		out = append(out, sarifoutput.RuleMetadata{
+			Plugin:      descriptor.Plugin,
+			Rule:        descriptor.Rule,
+			Name:        descriptor.Rule,
+			Description: descriptor.Description,
+			Help:        descriptor.Help,
+			Severity:    descriptor.Severity,
+			Category:    descriptor.Category,
+		})
+	}
+	for _, descriptor := range repohygiene.RuleDescriptors() {
+		out = append(out, sarifoutput.RuleMetadata{
+			Plugin:      descriptor.Plugin,
+			Rule:        descriptor.Rule,
+			Name:        descriptor.Rule,
+			Description: descriptor.Description,
+			Help:        descriptor.Help,
+			Severity:    descriptor.Severity,
+			Category:    descriptor.Category,
+		})
+	}
+	for _, descriptor := range thirdparty.RuleDescriptors() {
+		out = append(out, sarifoutput.RuleMetadata{
+			Plugin:      descriptor.Plugin,
+			Rule:        descriptor.Rule,
+			Name:        descriptor.Rule,
+			Description: descriptor.Description,
+			Help:        descriptor.Help,
+			DocsURL:     descriptor.DocsURL,
+			Severity:    descriptor.Severity,
+			Category:    descriptor.Category,
+		})
+	}
+	return out
 }
 
 type Duration time.Duration

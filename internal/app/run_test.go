@@ -79,6 +79,40 @@ func TestRunJSONOutputWorkspace(t *testing.T) {
 	}
 }
 
+func TestRunSARIFOutputWorkspace(t *testing.T) {
+	fixture := filepath.Join("..", "..", "testdata", "fixtures", "workspace")
+	configPath := writeNoAnalyzerConfig(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(context.Background(), []string{"--config", configPath, "--format=sarif", fixture}, &stdout, &stderr)
+	if code != ExitSuccess {
+		t.Fatalf("expected success, got %d: %s", code, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+
+	var payload struct {
+		Version string `json:"version"`
+		Runs    []struct {
+			Results []any `json:"results"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal sarif: %v", err)
+	}
+	if payload.Version != "2.1.0" {
+		t.Fatalf("expected SARIF version 2.1.0, got %q", payload.Version)
+	}
+	if len(payload.Runs) != 1 {
+		t.Fatalf("expected one run, got %d", len(payload.Runs))
+	}
+	if len(payload.Runs[0].Results) != 0 {
+		t.Fatalf("expected no findings, got %d", len(payload.Runs[0].Results))
+	}
+}
+
 func TestRunJSONOutputRepoHygiene(t *testing.T) {
 	fixture := filepath.Join("..", "..", "testdata", "fixtures", "repo-hygiene", "not-tidy")
 	configPath := writeRepoOnlyConfig(t)

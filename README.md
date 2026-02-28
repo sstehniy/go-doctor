@@ -41,6 +41,12 @@ Machine-readable output:
 go run ./cmd/go-doctor --format json .
 ```
 
+SARIF output for GitHub code scanning:
+
+```bash
+go run ./cmd/go-doctor --format sarif --output results.sarif .
+```
+
 Diff-focused scan (auto base detection, fallback to staged/unstaged):
 
 ```bash
@@ -83,6 +89,31 @@ Select rules explicitly:
 go run ./cmd/go-doctor --enable mod/not-tidy,build/mod-readonly-failure .
 go run ./cmd/go-doctor --disable fmt/not-gofmt .
 ```
+
+## GitHub Code Scanning
+
+This repository includes a reusable action at
+`./.github/actions/go-doctor` that installs a prebuilt release binary,
+runs a SARIF scan, uploads it through `github/codeql-action/upload-sarif`,
+and exposes summary outputs.
+
+Minimal workflow usage:
+
+```yaml
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/go-doctor
+```
+
+Full end-to-end example:
+[docs/examples/go-doctor-sarif-workflow.yml](./docs/examples/go-doctor-sarif-workflow.yml)
 
 ## Baseline-First Adoption (Recommended)
 

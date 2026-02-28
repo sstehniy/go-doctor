@@ -1,0 +1,39 @@
+name: go-doctor code scanning
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run go-doctor SARIF action
+        id: godoctor
+        uses: ./.github/actions/go-doctor
+        with:
+          directory: .
+          fail-on: warning
+          format: json
+          upload-sarif: "false"
+
+      - name: Upload SARIF to code scanning
+        if: always() && steps.godoctor.outputs.sarif-path != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ steps.godoctor.outputs.sarif-path }}
+
+      - name: Print summary outputs
+        run: |
+          echo "score=${{ steps.godoctor.outputs.score }}"
+          echo "findings=${{ steps.godoctor.outputs.findings }}"
+          echo "errors=${{ steps.godoctor.outputs.errors }}"
+          echo "warnings=${{ steps.godoctor.outputs.warnings }}"
+

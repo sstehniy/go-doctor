@@ -1,3 +1,3 @@
 package github
 
-// Package github reserves GitHub integration hooks for later milestones.
+// Package github contains GitHub CI integration helpers.

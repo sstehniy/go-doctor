@@ -357,6 +357,55 @@ func TestDiagnoseDiffDeletedFilesStillRecalculatePackageScope(t *testing.T) {
 	}
 }
 
+func TestRenderSARIFIncludesRegistryRuleMetadata(t *testing.T) {
+	body, err := RenderSARIF(DiagnoseResult{
+		Project: ProjectInfo{Root: "/repo"},
+		Diagnostics: []Diagnostic{
+			{
+				Path:     "main.go",
+				Line:     1,
+				Column:   1,
+				Plugin:   "repo",
+				Rule:     "fmt/not-gofmt",
+				Severity: "info",
+				Message:  "file is not gofmt formatted",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("render sarif: %v", err)
+	}
+
+	var payload struct {
+		Runs []struct {
+			Tool struct {
+				Driver struct {
+					Rules []struct {
+						ID   string `json:"id"`
+						Help struct {
+							Text string `json:"text"`
+						} `json:"help"`
+					} `json:"rules"`
+				} `json:"driver"`
+			} `json:"tool"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal sarif: %v", err)
+	}
+	if len(payload.Runs) != 1 {
+		t.Fatalf("expected one run, got %d", len(payload.Runs))
+	}
+
+	helpByRule := map[string]string{}
+	for _, rule := range payload.Runs[0].Tool.Driver.Rules {
+		helpByRule[rule.ID] = rule.Help.Text
+	}
+	if helpByRule["repo/fmt/not-gofmt"] == "" {
+		t.Fatal("expected repo rule help text from registry metadata")
+	}
+}
+
 func writeRepoFixture(t *testing.T, mainGo string) string {
 	t.Helper()
 
