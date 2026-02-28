@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -40,6 +41,8 @@ func TestDefaultPerAnalyzerTimeout(t *testing.T) {
 }
 
 func TestDiagnoseDoesNotCreateBaselineWhenToolErrorsExist(t *testing.T) {
+	t.Setenv("CI", "false")
+
 	repo := writeRepoFixture(t, "package main\nfunc main(){println(\"hi\")}\n")
 	baselinePath := filepath.Join(t.TempDir(), "baseline.json")
 	toolDir := toolPathWithGofmtOnly(t)
@@ -143,6 +146,8 @@ func TestDiagnoseReportsInvalidInlineSuppressions(t *testing.T) {
 }
 
 func TestDiagnoseBaselineSkipsInlineSuppressedFindings(t *testing.T) {
+	t.Setenv("CI", "false")
+
 	repo := writeRepoFixture(t, "package main\nfunc check(err error) bool {\n\treturn err.Error() == \"boom\" // godoctor:ignore error/string-compare legacy sentinel mismatch\n}\nfunc main() {}\n")
 	baselinePath := filepath.Join(t.TempDir(), "baseline.json")
 
@@ -431,9 +436,26 @@ func toolPathWithGofmtOnly(t *testing.T) string {
 	}
 
 	dir := t.TempDir()
+	if runtime.GOOS == "windows" {
+		// `exec.LookPath("gofmt")` on Windows resolves PATHEXT executables.
+		// Provide a cmd shim so PATH can include only this temp directory.
+		shimPath := filepath.Join(dir, "gofmt.cmd")
+		shim := "@echo off\r\n\"" + gofmtPath + "\" %*\r\n"
+		if err := os.WriteFile(shimPath, []byte(shim), 0o644); err != nil {
+			t.Fatalf("write gofmt shim: %v", err)
+		}
+		return dir
+	}
+
 	linkPath := filepath.Join(dir, "gofmt")
-	if err := os.Symlink(gofmtPath, linkPath); err != nil {
-		t.Fatalf("symlink gofmt: %v", err)
+	if err := os.Symlink(gofmtPath, linkPath); err == nil {
+		return dir
+	}
+
+	// Fallback for environments that disallow symlinks.
+	script := "#!/usr/bin/env sh\nexec \"" + gofmtPath + "\" \"$@\"\n"
+	if err := os.WriteFile(linkPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write gofmt wrapper: %v", err)
 	}
 	return dir
 }

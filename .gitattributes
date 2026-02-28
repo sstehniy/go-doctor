@@ -1,0 +1,7 @@
+# Keep test fixtures stable across platforms (especially Windows CI).
+testdata/** text eol=lf
+
+# Keep Go module/source files LF to avoid cross-platform formatter drift.
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
