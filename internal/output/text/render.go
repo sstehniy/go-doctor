@@ -57,7 +57,6 @@ func Render(result godoctor.DiagnoseResult, opts Options) []byte {
 	affectedFiles := countAffectedFiles(active)
 
 	b.WriteString("go-doctor\n")
-	b.WriteString("=========\n\n")
 
 	fmt.Fprintf(
 		&b,
@@ -69,7 +68,7 @@ func Render(result godoctor.DiagnoseResult, opts Options) []byte {
 		result.Project.PackageCount,
 	)
 
-	renderSummary(&b, result, severityCounts, len(suppressed), affectedFiles, opts.UseUnicode, colors)
+	renderSummary(&b, result, severityCounts, affectedFiles, opts.UseUnicode, colors)
 	b.WriteString("\n")
 
 	b.WriteString("Categories\n")
@@ -123,7 +122,6 @@ func renderSummary(
 	b *strings.Builder,
 	result godoctor.DiagnoseResult,
 	severityCounts map[string]int,
-	suppressedCount int,
 	affectedFiles int,
 	unicode bool,
 	colors palette,
@@ -132,40 +130,68 @@ func renderSummary(
 	scoreBar := ""
 
 	if result.Score != nil && result.Score.Enabled {
-		scoreText := fmt.Sprintf("%d/%d (%s)", result.Score.Value, result.Score.Max, valueOrNA(result.Score.Grade))
-		scoreLine = "Score: " + scoreText
-		scoreBar = buildScoreBar(result.Score.Value, result.Score.Max, 30, false)
+		scoreLine = fmt.Sprintf("%d / %d  %s", result.Score.Value, result.Score.Max, valueOrNA(result.Score.Grade))
+		scoreBar = buildScoreBar(result.Score.Value, result.Score.Max, 30, unicode, colors)
 	}
 
-	errorSymbol, warningSymbol, infoSymbol := "E", "W", "I"
-	errorCount, warningCount, infoCount := severityCounts["error"], severityCounts["warning"], severityCounts["info"]
-
-	findingsLine := strings.Join([]string{
-		"Findings:",
-		errorSymbol + " " + strconv.Itoa(errorCount),
-		warningSymbol + " " + strconv.Itoa(warningCount),
-		infoSymbol + " " + strconv.Itoa(infoCount),
-		"suppressed " + strconv.Itoa(suppressedCount),
-	}, "  ")
+	errorCount := severityCounts["error"]
+	warningCount := severityCounts["warning"]
 
 	elapsed := formatElapsed(result.ElapsedMillis)
+
+	errorLabel := "errors"
+	if errorCount == 1 {
+		errorLabel = "error"
+	}
+	warningLabel := "warnings"
+	if warningCount == 1 {
+		warningLabel = "warning"
+	}
+
+	errorSymbol, warningSymbol := "x", "!"
+	if unicode {
+		errorSymbol, warningSymbol = "×", "▲"
+	}
+
+	var footerParts []string
+	if errorCount > 0 {
+		footerParts = append(footerParts, colors.red(errorSymbol+" "+strconv.Itoa(errorCount)+" "+errorLabel))
+	}
+	if warningCount > 0 {
+		footerParts = append(footerParts, colors.yellow(warningSymbol+" "+strconv.Itoa(warningCount)+" "+warningLabel))
+	}
+	if errorCount == 0 && warningCount == 0 {
+		footerParts = append(footerParts, "no issues")
+	}
+
 	filesLabel := "files"
 	if affectedFiles == 1 {
 		filesLabel = "file"
 	}
+	filesText := fmt.Sprintf("across %d %s", affectedFiles, filesLabel)
+	footerParts = append(footerParts, filesText)
+	footerParts = append(footerParts, "in "+elapsed)
+
+	footerLine := strings.Join(footerParts, "  ")
 
 	lines := []string{
+		"Golang Doctor",
+		"",
 		scoreLine,
+		"",
+		scoreBar,
+		"",
+		footerLine,
 	}
-	if scoreBar != "" {
-		lines = append(lines, scoreBar)
+	if scoreBar == "" {
+		lines = []string{
+			"go-doctor",
+			"",
+			scoreLine,
+			"",
+			footerLine,
+		}
 	}
-	lines = append(
-		lines,
-		findingsLine,
-		fmt.Sprintf("Affected: %d %s", affectedFiles, filesLabel),
-		fmt.Sprintf("Elapsed: %s", elapsed),
-	)
 	writeSummaryBox(b, lines, unicode, colors)
 }
 
@@ -423,7 +449,7 @@ func formatElapsed(elapsedMillis int64) string {
 	return fmt.Sprintf("%.1fs", seconds)
 }
 
-func buildScoreBar(score int, max int, width int, unicode bool) string {
+func buildScoreBar(score int, max int, width int, unicode bool, colors palette) string {
 	if max <= 0 || width <= 0 {
 		return ""
 	}
@@ -441,7 +467,7 @@ func buildScoreBar(score int, max int, width int, unicode bool) string {
 		filledChar = "█"
 		emptyChar = "░"
 	}
-	return strings.Repeat(filledChar, filled) + strings.Repeat(emptyChar, empty)
+	return colors.green(strings.Repeat(filledChar, filled)) + colors.dim(strings.Repeat(emptyChar, empty))
 }
 
 func valueOrNA(value string) string {
@@ -456,6 +482,7 @@ type palette struct {
 }
 
 func (p palette) red(value string) string    { return p.color("31", value) }
+func (p palette) green(value string) string  { return p.color("32", value) }
 func (p palette) yellow(value string) string { return p.color("33", value) }
 func (p palette) cyan(value string) string   { return p.color("36", value) }
 func (p palette) dim(value string) string    { return p.color("2", value) }
@@ -480,10 +507,34 @@ func (p palette) color(code string, value string) string {
 	return "\x1b[" + code + "m" + value + "\x1b[0m"
 }
 
+func visibleWidth(s string) int {
+	stripped := stripAnsi(s)
+	return utf8.RuneCountInString(stripped)
+}
+
+func stripAnsi(s string) string {
+	var out strings.Builder
+	for i := 0; i < len(s); {
+		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
+			j := i + 2
+			for j < len(s) && s[j] != 'm' {
+				j++
+			}
+			if j < len(s) {
+				i = j + 1
+				continue
+			}
+		}
+		out.WriteByte(s[i])
+		i++
+	}
+	return out.String()
+}
+
 func writeSummaryBox(b *strings.Builder, lines []string, unicode bool, colors palette) {
 	maxWidth := 0
 	for _, line := range lines {
-		width := utf8.RuneCountInString(line)
+		width := visibleWidth(line)
 		if width > maxWidth {
 			maxWidth = width
 		}
@@ -497,7 +548,7 @@ func writeSummaryBox(b *strings.Builder, lines []string, unicode bool, colors pa
 	b.WriteString("\n")
 
 	for _, line := range lines {
-		padding := strings.Repeat(" ", maxWidth-utf8.RuneCountInString(line))
+		padding := strings.Repeat(" ", maxWidth-visibleWidth(line))
 		b.WriteString("  ")
 		b.WriteString(colors.dim(vertical))
 		b.WriteString(" ")
