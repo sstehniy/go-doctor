@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/stanislavstehniy/go-doctor/internal/diagnostics"
+	"github.com/sstehniy/go-doctor/internal/diagnostics"
 )
 
 func TestRepoHygieneRuleFixtures(t *testing.T) {

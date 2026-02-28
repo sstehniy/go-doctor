@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stanislavstehniy/go-doctor/internal/model"
+	"github.com/sstehniy/go-doctor/internal/model"
 )
 
 type Analyzer interface {

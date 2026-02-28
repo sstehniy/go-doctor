@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/stanislavstehniy/go-doctor/internal/app"
+	"github.com/sstehniy/go-doctor/internal/app"
 )
 
 func main() {

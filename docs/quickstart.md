@@ -11,13 +11,13 @@ go build -o go-doctor ./cmd/go-doctor
 With `go install`:
 
 ```bash
-go install github.com/stanislavstehniy/go-doctor/cmd/go-doctor@latest
+go install github.com/sstehniy/go-doctor/cmd/go-doctor@latest
 ```
 
 Pinned release:
 
 ```bash
-go install github.com/stanislavstehniy/go-doctor/cmd/go-doctor@v1.2.3
+go install github.com/sstehniy/go-doctor/cmd/go-doctor@v1.2.3
 ```
 
 From a release archive:

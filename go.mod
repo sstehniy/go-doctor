@@ -1,4 +1,4 @@
-module github.com/stanislavstehniy/go-doctor
+module github.com/sstehniy/go-doctor
 
 go 1.23.0
 

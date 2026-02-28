@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/stanislavstehniy/go-doctor/internal/model"
+	"github.com/sstehniy/go-doctor/internal/model"
 )
 
 func TestRenderEmitsSARIF21WithSingleRun(t *testing.T) {

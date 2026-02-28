@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	cfgpkg "github.com/stanislavstehniy/go-doctor/internal/config"
-	jsonoutput "github.com/stanislavstehniy/go-doctor/internal/output/json"
-	textoutput "github.com/stanislavstehniy/go-doctor/internal/output/text"
-	"github.com/stanislavstehniy/go-doctor/pkg/godoctor"
+	cfgpkg "github.com/sstehniy/go-doctor/internal/config"
+	jsonoutput "github.com/sstehniy/go-doctor/internal/output/json"
+	textoutput "github.com/sstehniy/go-doctor/internal/output/text"
+	"github.com/sstehniy/go-doctor/pkg/godoctor"
 )
 
 const (

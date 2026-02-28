@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stanislavstehniy/go-doctor/pkg/godoctor"
+	"github.com/sstehniy/go-doctor/pkg/godoctor"
 )
 
 func TestLoadPrecedence(t *testing.T) {

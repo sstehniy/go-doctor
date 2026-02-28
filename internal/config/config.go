@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stanislavstehniy/go-doctor/pkg/godoctor"
+	"github.com/sstehniy/go-doctor/pkg/godoctor"
 	"gopkg.in/yaml.v3"
 )
 
