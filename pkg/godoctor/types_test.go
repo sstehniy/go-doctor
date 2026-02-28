@@ -2,6 +2,7 @@ package godoctor
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -82,6 +83,96 @@ func TestDiagnoseDoesNotCreateBaselineWhenAllAnalyzersFail(t *testing.T) {
 	}
 	if _, statErr := os.Stat(baselinePath); !os.IsNotExist(statErr) {
 		t.Fatalf("expected no baseline file to be created, got err=%v", statErr)
+	}
+}
+
+func TestDiagnoseAppliesInlineSuppressions(t *testing.T) {
+	repo := writeRepoFixture(t, "package main\nfunc check(err error) bool {\n\treturn err.Error() == \"boom\" // godoctor:ignore error/string-compare legacy sentinel mismatch\n}\nfunc main() {}\n")
+
+	result, err := Diagnose(context.Background(), repo, Options{
+		Timeout:     30 * time.Second,
+		Concurrency: 1,
+		EnableRules: []string{"error/string-compare"},
+		RepoHygiene: false,
+		ThirdParty:  false,
+		Custom:      true,
+	})
+	if err != nil {
+		t.Fatalf("diagnose: %v", err)
+	}
+	if len(result.ToolErrors) != 0 {
+		t.Fatalf("expected no tool errors, got %#v", result.ToolErrors)
+	}
+	if len(result.Diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic, got %#v", result.Diagnostics)
+	}
+	if !result.Diagnostics[0].Suppressed {
+		t.Fatalf("expected diagnostic to be suppressed, got %#v", result.Diagnostics[0])
+	}
+}
+
+func TestDiagnoseReportsInvalidInlineSuppressions(t *testing.T) {
+	repo := writeRepoFixture(t, "package main\nfunc check(err error) bool {\n\treturn err.Error() == \"boom\" // godoctor:ignore error/string-compare\n}\nfunc main() {}\n")
+
+	result, err := Diagnose(context.Background(), repo, Options{
+		Timeout:     30 * time.Second,
+		Concurrency: 1,
+		EnableRules: []string{"error/string-compare"},
+		RepoHygiene: false,
+		ThirdParty:  false,
+		Custom:      true,
+	})
+	if err != nil {
+		t.Fatalf("diagnose: %v", err)
+	}
+	if len(result.Diagnostics) != 2 {
+		t.Fatalf("expected two diagnostics, got %#v", result.Diagnostics)
+	}
+
+	byRule := map[string]Diagnostic{}
+	for _, diagnostic := range result.Diagnostics {
+		byRule[diagnostic.Rule] = diagnostic
+	}
+	if byRule["error/string-compare"].Suppressed {
+		t.Fatalf("expected malformed suppression to leave original finding active, got %#v", byRule["error/string-compare"])
+	}
+	if byRule["suppress/invalid"].Rule != "suppress/invalid" {
+		t.Fatalf("expected invalid suppression diagnostic, got %#v", result.Diagnostics)
+	}
+}
+
+func TestDiagnoseBaselineSkipsInlineSuppressedFindings(t *testing.T) {
+	repo := writeRepoFixture(t, "package main\nfunc check(err error) bool {\n\treturn err.Error() == \"boom\" // godoctor:ignore error/string-compare legacy sentinel mismatch\n}\nfunc main() {}\n")
+	baselinePath := filepath.Join(t.TempDir(), "baseline.json")
+
+	result, err := Diagnose(context.Background(), repo, Options{
+		Timeout:      30 * time.Second,
+		Concurrency:  1,
+		EnableRules:  []string{"error/string-compare"},
+		BaselinePath: baselinePath,
+		RepoHygiene:  false,
+		ThirdParty:   false,
+		Custom:       true,
+	})
+	if err != nil {
+		t.Fatalf("diagnose: %v", err)
+	}
+	if len(result.Diagnostics) != 1 || !result.Diagnostics[0].Suppressed {
+		t.Fatalf("expected one suppressed diagnostic, got %#v", result.Diagnostics)
+	}
+
+	raw, err := os.ReadFile(baselinePath)
+	if err != nil {
+		t.Fatalf("read baseline: %v", err)
+	}
+	var file struct {
+		Entries []json.RawMessage `json:"entries"`
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
+		t.Fatalf("unmarshal baseline: %v", err)
+	}
+	if len(file.Entries) != 0 {
+		t.Fatalf("expected inline-suppressed findings to stay out of the baseline, got %d entries", len(file.Entries))
 	}
 }
 

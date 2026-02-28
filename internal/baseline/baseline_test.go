@@ -85,3 +85,34 @@ func TestWriteProducesDeterministicJSON(t *testing.T) {
 		t.Fatalf("expected entries sorted by fingerprint: %#v", file.Entries)
 	}
 }
+
+func TestBuildSkipsSuppressedDiagnostics(t *testing.T) {
+	file := Build([]model.Diagnostic{
+		{
+			Rule:       "rule/one",
+			Path:       "main.go",
+			Line:       3,
+			Column:     1,
+			EndLine:    3,
+			EndColumn:  10,
+			Message:    "keep me out",
+			Suppressed: true,
+		},
+		{
+			Rule:      "rule/two",
+			Path:      "main.go",
+			Line:      5,
+			Column:    1,
+			EndLine:   5,
+			EndColumn: 10,
+			Message:   "still active",
+		},
+	})
+
+	if len(file.Entries) != 1 {
+		t.Fatalf("expected only unsuppressed entries, got %#v", file.Entries)
+	}
+	if file.Entries[0].Rule != "rule/two" {
+		t.Fatalf("unexpected baseline entry: %#v", file.Entries[0])
+	}
+}

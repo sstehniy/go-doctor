@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/stanislavstehniy/go-doctor/internal/discovery"
 	"github.com/stanislavstehniy/go-doctor/internal/model"
 	"github.com/stanislavstehniy/go-doctor/internal/scoring"
+	"github.com/stanislavstehniy/go-doctor/internal/suppressions"
 )
 
 type Options struct {
@@ -157,6 +159,12 @@ func Diagnose(ctx context.Context, target string, opts Options) (DiagnoseResult,
 		result.ElapsedMillis = time.Since(start).Milliseconds()
 		return result, fmt.Errorf("all analyzers failed")
 	}
+	suppressionFilter, invalidSuppressions, suppressionToolErrors := suppressions.Load(targetSpec)
+	result.Diagnostics = suppressions.Apply(result.Diagnostics, suppressionFilter)
+	result.Diagnostics = append(result.Diagnostics, invalidSuppressions...)
+	result.ToolErrors = append(result.ToolErrors, suppressionToolErrors...)
+	sortDiagnostics(result.Diagnostics)
+	sortToolErrors(result.ToolErrors)
 	if err := applyBaseline(&result, opts); err != nil {
 		result.ElapsedMillis = time.Since(start).Milliseconds()
 		return result, err
@@ -291,4 +299,36 @@ func ciEnabled() bool {
 	default:
 		return true
 	}
+}
+
+func sortDiagnostics(diagnosticsOut []model.Diagnostic) {
+	sort.SliceStable(diagnosticsOut, func(i, j int) bool {
+		left := diagnosticsOut[i]
+		right := diagnosticsOut[j]
+		if left.Path != right.Path {
+			return left.Path < right.Path
+		}
+		if left.Line != right.Line {
+			return left.Line < right.Line
+		}
+		if left.Column != right.Column {
+			return left.Column < right.Column
+		}
+		if left.Plugin != right.Plugin {
+			return left.Plugin < right.Plugin
+		}
+		if left.Rule != right.Rule {
+			return left.Rule < right.Rule
+		}
+		return left.Message < right.Message
+	})
+}
+
+func sortToolErrors(toolErrors []model.ToolError) {
+	sort.SliceStable(toolErrors, func(i, j int) bool {
+		if toolErrors[i].Tool != toolErrors[j].Tool {
+			return toolErrors[i].Tool < toolErrors[j].Tool
+		}
+		return toolErrors[i].Message < toolErrors[j].Message
+	})
 }

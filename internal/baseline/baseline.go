@@ -92,6 +92,9 @@ func Write(path string, diagnostics []model.Diagnostic) error {
 func Build(diagnostics []model.Diagnostic) File {
 	entries := make([]Entry, 0, len(diagnostics))
 	for _, diagnostic := range diagnostics {
+		if diagnostic.Suppressed {
+			continue
+		}
 		line, column, endLine, endColumn := normalizedRange(diagnostic)
 		entries = append(entries, Entry{
 			Fingerprint: Fingerprint(diagnostic),
