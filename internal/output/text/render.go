@@ -543,13 +543,11 @@ func writeSummaryBox(b *strings.Builder, lines []string, unicode bool, colors pa
 	leftTop, rightTop, leftBottom, rightBottom, horizontal, vertical := boxChars(unicode)
 	border := strings.Repeat(horizontal, maxWidth+2)
 
-	b.WriteString("  ")
 	b.WriteString(colors.dim(leftTop + border + rightTop))
 	b.WriteString("\n")
 
 	for _, line := range lines {
 		padding := strings.Repeat(" ", maxWidth-visibleWidth(line))
-		b.WriteString("  ")
 		b.WriteString(colors.dim(vertical))
 		b.WriteString(" ")
 		b.WriteString(line)
@@ -559,7 +557,6 @@ func writeSummaryBox(b *strings.Builder, lines []string, unicode bool, colors pa
 		b.WriteString("\n")
 	}
 
-	b.WriteString("  ")
 	b.WriteString(colors.dim(leftBottom + border + rightBottom))
 	b.WriteString("\n")
 }
