@@ -84,7 +84,7 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 	result, err := godoctor.Diagnose(ctx, cli.target, opts)
 	if err != nil {
 		if result.SchemaVersion != 0 {
-			rendered, renderErr := renderOutput(result, opts)
+			rendered, renderErr := renderOutput(result, opts, stdout)
 			if renderErr == nil && len(rendered) > 0 {
 				if _, writeErr := stdout.Write(rendered); writeErr != nil {
 					fmt.Fprintln(stderr, writeErr)
@@ -105,7 +105,7 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 		return ExitFatal
 	}
 
-	rendered, err := renderOutput(result, opts)
+	rendered, err := renderOutput(result, opts, stdout)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return ExitFatal
@@ -288,10 +288,10 @@ func normalizeArgs(args []string) []string {
 	return normalized
 }
 
-func renderOutput(result godoctor.DiagnoseResult, opts godoctor.Options) ([]byte, error) {
+func renderOutput(result godoctor.DiagnoseResult, opts godoctor.Options, stdout io.Writer) ([]byte, error) {
 	switch opts.Format {
 	case "text":
-		return textoutput.Render(result, opts.Verbose, opts.Quiet), nil
+		return textoutput.Render(result, textRenderOptions(opts, stdout)), nil
 	case "json":
 		return jsonoutput.Render(result)
 	case "sarif":
@@ -299,6 +299,35 @@ func renderOutput(result godoctor.DiagnoseResult, opts godoctor.Options) ([]byte
 	default:
 		return nil, fmt.Errorf("unsupported output format %q", opts.Format)
 	}
+}
+
+func textRenderOptions(opts godoctor.Options, stdout io.Writer) textoutput.Options {
+	useTerminalStyles := supportsTerminalStyles(stdout)
+	return textoutput.Options{
+		Verbose:         opts.Verbose,
+		Quiet:           opts.Quiet,
+		UseColor:        useTerminalStyles,
+		UseUnicode:      useTerminalStyles,
+		MaxCompactFiles: 3,
+	}
+}
+
+func supportsTerminalStyles(stdout io.Writer) bool {
+	if os.Getenv("NO_COLOR") != "" || strings.EqualFold(strings.TrimSpace(os.Getenv("TERM")), "dumb") {
+		return false
+	}
+	if strings.TrimSpace(os.Getenv("CI")) != "" {
+		return false
+	}
+	file, ok := stdout.(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
 }
 
 func breachesThreshold(result godoctor.DiagnoseResult, failOn string) bool {
